@@ -1,0 +1,7 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Levain notification icon">
+  <g fill="none">
+    <path d="M96 304c0-88 72-160 160-160s160 72 160 160v56H96v-56z" fill="#ffffff"/>
+    <path d="M140 248c24-30 56-50 90-50" stroke="#ffffff" stroke-width="16" stroke-linecap="round"/>
+    <path d="M230 236c32-18 64-26 96-26" stroke="#ffffff" stroke-width="16" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -1,0 +1,22 @@
+<svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Levain loading screen">
+  <defs>
+    <linearGradient id="bgGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fff8f0"/>
+      <stop offset="100%" stop-color="#f5ebe0"/>
+    </linearGradient>
+    <linearGradient id="loafGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#a0522d"/>
+      <stop offset="100%" stop-color="#8b4513"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1920" fill="url(#bgGradient)"/>
+  <g transform="translate(290 620)">
+    <rect x="0" y="0" width="500" height="500" rx="120" fill="#fff8f0" stroke="#e0ccb3" stroke-width="8"/>
+    <path d="M60 320c0-110 88-198 190-198s190 88 190 198v70H60v-70z" fill="url(#loafGradient)"/>
+    <path d="M120 210c26-32 60-52 96-52" stroke="#fef3c7" stroke-width="12" stroke-linecap="round"/>
+    <path d="M240 200c34-20 68-28 102-28" stroke="#fef3c7" stroke-width="12" stroke-linecap="round"/>
+    <path d="M96 372h308" stroke="#6b3410" stroke-width="12" stroke-linecap="round" opacity="0.35"/>
+  </g>
+  <text x="540" y="1310" text-anchor="middle" fill="#4a240c" font-family="'Playfair Display','Georgia',serif" font-size="64" font-weight="700" letter-spacing="1">Levain</text>
+  <text x="540" y="1360" text-anchor="middle" fill="#8a6f3e" font-family="'Crimson Pro','Georgia',serif" font-size="28">Sourdough Companion</text>
+</svg>

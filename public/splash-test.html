@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Splash Screen Test</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #333;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      padding: 20px;
+    }
+
+    h1 {
+      color: white;
+      margin-bottom: 20px;
+    }
+
+    .phone-frame {
+      width: 360px;
+      height: 640px;
+      border: 8px solid #222;
+      border-radius: 32px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+
+    .splash-screen {
+      width: 100%;
+      height: 100%;
+      background: #5D3A1A;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .splash-text {
+      color: #FFF8F0;
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 48px;
+      letter-spacing: 8px;
+      font-weight: normal;
+    }
+
+    .splash-text-2 {
+      font-size: 42px;
+      letter-spacing: 12px;
+    }
+
+    .splash-text-3 {
+      font-size: 36px;
+      letter-spacing: 16px;
+      font-weight: 300;
+    }
+
+    .label {
+      color: #aaa;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    .options {
+      display: flex;
+      gap: 30px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .option {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>Splash Screen Options</h1>
+
+  <div class="options">
+    <div class="option">
+      <div class="phone-frame">
+        <div class="splash-screen">
+          <span class="splash-text">Levain</span>
+        </div>
+      </div>
+      <span class="label">Option 1: 48px, 8px spacing</span>
+    </div>
+
+    <div class="option">
+      <div class="phone-frame">
+        <div class="splash-screen">
+          <span class="splash-text splash-text-2">Levain</span>
+        </div>
+      </div>
+      <span class="label">Option 2: 42px, 12px spacing</span>
+    </div>
+
+    <div class="option">
+      <div class="phone-frame">
+        <div class="splash-screen">
+          <span class="splash-text splash-text-3">Levain</span>
+        </div>
+      </div>
+      <span class="label">Option 3: 36px, 16px spacing</span>
+    </div>
+  </div>
+</body>
+</html>

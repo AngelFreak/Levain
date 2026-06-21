@@ -1,0 +1,321 @@
+@import "tailwindcss";
+
+/* Enable class-based dark mode (using .dark class on html/body) */
+@variant dark (&:where(.dark, .dark *));
+
+/* Levain - Artisan Bakery Theme with Material Design 3 */
+@theme {
+  /* Crust colors - warm browns */
+  --color-crust-50: #faf5f0;
+  --color-crust-100: #f0e6d9;
+  --color-crust-200: #e0ccb3;
+  --color-crust-300: #cba87a;
+  --color-crust-400: #b58550;
+  --color-crust-500: #a0522d;
+  --color-crust-600: #8b4513;
+  --color-crust-700: #6b3410;
+  --color-crust-800: #5a2c0e;
+  --color-crust-900: #4a240c;
+  --color-crust-950: #2c1507;
+
+  /* Crumb colors - warm beige/wheat */
+  --color-crumb-50: #fffbf5;
+  --color-crumb-100: #fff8dc;
+  --color-crumb-200: #fef3c7;
+  --color-crumb-300: #f5deb3;
+  --color-crumb-400: #e8d4b8;
+  --color-crumb-500: #deb887;
+  --color-crumb-600: #c9a66b;
+  --color-crumb-700: #a88a4f;
+  --color-crumb-800: #8a6f3e;
+  --color-crumb-900: #6b5530;
+  --color-crumb-950: #4a3a1f;
+
+  /* Honey colors - golden accents */
+  --color-honey-50: #fffbeb;
+  --color-honey-100: #fef3c7;
+  --color-honey-200: #fde68a;
+  --color-honey-300: #fcd34d;
+  --color-honey-400: #fbbf24;
+  --color-honey-500: #daa520;
+  --color-honey-600: #b8860b;
+  --color-honey-700: #92400e;
+  --color-honey-800: #78350f;
+  --color-honey-900: #5c2d0e;
+  --color-honey-950: #3d1c08;
+
+  /* Semantic colors */
+  --color-success-50: #f0fdf4;
+  --color-success-100: #dcfce7;
+  --color-success-200: #bbf7d0;
+  --color-success-300: #86efac;
+  --color-success-400: #4ade80;
+  --color-success-500: #4a7c59;
+  --color-success-600: #3d6b4a;
+  --color-success-700: #2f5439;
+  --color-success-800: #1e3a25;
+  --color-success-900: #14532d;
+  --color-success-950: #052e16;
+
+  --color-warning-50: #fffbeb;
+  --color-warning-100: #fef3c7;
+  --color-warning-200: #fde68a;
+  --color-warning-300: #fcd34d;
+  --color-warning-400: #fbbf24;
+  --color-warning-500: #d4a020;
+  --color-warning-600: #b8860b;
+  --color-warning-700: #92400e;
+  --color-warning-800: #78350f;
+  --color-warning-900: #5c2d0e;
+  --color-warning-950: #3d1c08;
+
+  --color-error-50: #fef2f2;
+  --color-error-100: #fee2e2;
+  --color-error-200: #fecaca;
+  --color-error-300: #fca5a5;
+  --color-error-400: #f87171;
+  --color-error-500: #a94438;
+  --color-error-600: #8b3730;
+  --color-error-700: #6b2b24;
+  --color-error-800: #5a241f;
+  --color-error-900: #450a0a;
+  --color-error-950: #2c0a0a;
+
+  /* Background colors */
+  --color-flour: #faf0e6;
+  --color-warmWhite: #fff8f0;
+  --color-sourdough: #e8d4b8;
+  --color-charcoal: #2c2416;
+
+  /* MD3 Surface Tone System - Light Mode (use as bg-surface0, bg-surface1, etc.) */
+  /* Increased contrast for better visibility */
+  --color-surface0: #fff8f0;        /* warmWhite - base */
+  --color-surface1: #f5ebe0;        /* visible cream tint */
+  --color-surface2: #efe4d6;        /* stronger cream */
+  --color-surface3: #e8d9c8;        /* noticeable beige */
+  --color-surface4: #e0d0bc;        /* stronger beige */
+  --color-surface5: #d8c6b0;        /* distinct tan */
+
+  /* MD3 Surface Tone System - Dark Mode (use as bg-surfaceDark0, bg-surfaceDark1, etc.) */
+  --color-surfaceDark0: #2c2416;   /* charcoal - base */
+  --color-surfaceDark1: #352d1f;   /* +3% primary tint */
+  --color-surfaceDark2: #3e3628;   /* +5% primary tint */
+  --color-surfaceDark3: #473f31;   /* +8% primary tint */
+  --color-surfaceDark4: #50483a;   /* +11% primary tint */
+  --color-surfaceDark5: #595143;   /* +14% primary tint */
+
+  /* MD3 On-Surface colors */
+  --color-onSurface: #2c2416;
+  --color-onSurfaceVariant: #5a4d3a;
+  --color-onSurfaceDark: #faf5f0;
+  --color-onSurfaceVariantDark: #c9b99d;
+
+  /* Font families */
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body: 'Crimson Pro', Georgia, serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* MD3 Typography Scale */
+  --text-display-lg: 3.5625rem;     /* 57px */
+  --text-display-md: 2.8125rem;     /* 45px */
+  --text-display-sm: 2.25rem;       /* 36px */
+  --text-headline-lg: 2rem;         /* 32px */
+  --text-headline-md: 1.75rem;      /* 28px */
+  --text-headline-sm: 1.5rem;       /* 24px */
+  --text-title-lg: 1.375rem;        /* 22px */
+  --text-title-md: 1rem;            /* 16px */
+  --text-title-sm: 0.875rem;        /* 14px */
+  --text-body-lg: 1rem;             /* 16px */
+  --text-body-md: 0.875rem;         /* 14px */
+  --text-body-sm: 0.75rem;          /* 12px */
+  --text-label-lg: 0.875rem;        /* 14px */
+  --text-label-md: 0.75rem;         /* 12px */
+  --text-label-sm: 0.6875rem;       /* 11px */
+
+  /* MD3 Spacing Scale (8dp grid) */
+  --spacing-0: 0;
+  --spacing-1: 0.25rem;   /* 4px */
+  --spacing-2: 0.5rem;    /* 8px */
+  --spacing-3: 0.75rem;   /* 12px */
+  --spacing-4: 1rem;      /* 16px */
+  --spacing-5: 1.25rem;   /* 20px */
+  --spacing-6: 1.5rem;    /* 24px */
+  --spacing-8: 2rem;      /* 32px */
+  --spacing-10: 2.5rem;   /* 40px */
+  --spacing-12: 3rem;     /* 48px */
+  --spacing-16: 4rem;     /* 64px */
+
+  /* Border radius for rounded mobile feel */
+  --radius-sm: 0.5rem;    /* 8px */
+  --radius-md: 0.75rem;   /* 12px */
+  --radius-lg: 1rem;      /* 16px */
+  --radius-xl: 1.25rem;   /* 20px */
+  --radius-2xl: 1.5rem;   /* 24px */
+  --radius-3xl: 2rem;     /* 32px */
+  --radius-full: 9999px;
+
+  /* Focus ring */
+  --focus-ring-color: #8b4513;
+  --focus-ring-color-dark: #daa520;
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+}
+
+/* Base styles */
+@layer base {
+  html {
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Prevent iOS text size adjust */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-warmWhite text-charcoal;
+    /* Safe area insets for notch devices */
+    padding-top: env(safe-area-inset-top);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    /* Fixed height to prevent scroll bounce */
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    @apply font-semibold;
+  }
+
+  /* Prevent overscroll bounce on iOS/Android */
+  html, body {
+    overscroll-behavior: none;
+    overflow: hidden;
+    touch-action: pan-x pan-y;
+  }
+
+  /* Lock viewport */
+  html {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Touch-friendly defaults */
+  button, a, [role="button"] {
+    touch-action: manipulation;
+  }
+
+  /* Hide scrollbars globally for mobile feel */
+  * {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  body {
+    @apply bg-charcoal text-crumb-100;
+  }
+}
+
+/* Utility classes for mobile */
+@layer utilities {
+  /* Minimum touch target size (44x44px as per spec) */
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Safe area padding utilities */
+  .pb-safe {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  .pt-safe {
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+
+  /* MD3 Typography utilities */
+  .text-display-lg { font-size: var(--text-display-lg); line-height: 1.1; }
+  .text-display-md { font-size: var(--text-display-md); line-height: 1.15; }
+  .text-display-sm { font-size: var(--text-display-sm); line-height: 1.2; }
+  .text-headline-lg { font-size: var(--text-headline-lg); line-height: 1.25; }
+  .text-headline-md { font-size: var(--text-headline-md); line-height: 1.3; }
+  .text-headline-sm { font-size: var(--text-headline-sm); line-height: 1.35; }
+  .text-title-lg { font-size: var(--text-title-lg); line-height: 1.4; }
+  .text-title-md { font-size: var(--text-title-md); line-height: 1.5; font-weight: 500; }
+  .text-title-sm { font-size: var(--text-title-sm); line-height: 1.4; font-weight: 500; }
+  .text-body-lg { font-size: var(--text-body-lg); line-height: 1.5; }
+  .text-body-md { font-size: var(--text-body-md); line-height: 1.4; }
+  .text-body-sm { font-size: var(--text-body-sm); line-height: 1.35; }
+  .text-label-lg { font-size: var(--text-label-lg); line-height: 1.4; font-weight: 500; }
+  .text-label-md { font-size: var(--text-label-md); line-height: 1.35; font-weight: 500; }
+  .text-label-sm { font-size: var(--text-label-sm); line-height: 1.3; font-weight: 500; }
+
+  /* WCAG-compliant focus ring */
+  .focus-ring {
+    outline: none;
+  }
+  .focus-ring:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+  }
+}
+
+/* Dark mode focus ring */
+@media (prefers-color-scheme: dark) {
+  .focus-ring:focus-visible {
+    outline-color: var(--focus-ring-color-dark);
+  }
+}
+
+/* Global focus styles for interactive elements */
+@layer base {
+  /* Skip to content link for accessibility */
+  .skip-to-content {
+    position: absolute;
+    top: -100%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.5rem 1rem;
+    background-color: var(--color-crust-600);
+    color: white;
+    border-radius: var(--radius-md);
+    z-index: 9999;
+    transition: top 0.2s ease;
+  }
+  .skip-to-content:focus {
+    top: 1rem;
+  }
+
+  /* Improved focus states */
+  button:focus-visible,
+  a:focus-visible,
+  [role="button"]:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  button:focus-visible,
+  a:focus-visible,
+  [role="button"]:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline-color: var(--focus-ring-color-dark);
+  }
+}

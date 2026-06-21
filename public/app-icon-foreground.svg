@@ -1,0 +1,16 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Levain app icon foreground">
+  <defs>
+    <linearGradient id="loafGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#a0522d"/>
+      <stop offset="100%" stop-color="#8b4513"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(192 250)">
+    <path d="M64 370c0-140 112-252 256-252s256 112 256 252v88H64v-88z" fill="url(#loafGradient)"/>
+    <path d="M140 222c36-44 84-72 132-72" stroke="#fef3c7" stroke-width="20" stroke-linecap="round"/>
+    <path d="M280 208c48-28 96-40 144-40" stroke="#fef3c7" stroke-width="20" stroke-linecap="round"/>
+    <path d="M108 446h432" stroke="#6b3410" stroke-width="20" stroke-linecap="round" opacity="0.35"/>
+    <circle cx="512" cy="40" r="18" fill="#daa520"/>
+    <circle cx="540" cy="64" r="10" fill="#daa520" opacity="0.8"/>
+  </g>
+</svg>
