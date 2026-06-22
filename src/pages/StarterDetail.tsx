@@ -13,8 +13,11 @@ import {
   ImageIcon,
   CheckCircle2,
   Lightbulb,
+  HelpCircle,
+  KeyRound,
+  Cpu,
 } from 'lucide-react';
-import { Card, Button, ActionSheet, Badge } from '../components/ui';
+import { Card, Button, ActionSheet, Badge, BottomSheet } from '../components/ui';
 import { ConfirmModal } from '../components/ui/Modal';
 import { EditStarterModal } from '../components/modals';
 import { useAppStore } from '../stores/appStore';
@@ -42,6 +45,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPhotoSheet, setShowPhotoSheet] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   useEffect(() => {
@@ -197,6 +201,13 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
           Back
         </button>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowHelp(true)}
+            aria-label="How analysis works"
+            className="p-2 rounded-full hover:bg-crumb-100 dark:hover:bg-crust-800"
+          >
+            <HelpCircle className="w-5 h-5 text-crust-600 dark:text-crumb-400" />
+          </button>
           <button
             onClick={() => setShowEditModal(true)}
             className="p-2 rounded-full hover:bg-crumb-100 dark:hover:bg-crust-800"
@@ -529,6 +540,84 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
         starter={starter}
         onSave={(updatedStarter) => setStarter(updatedStarter)}
       />
+
+      {/* Help: how starter analysis works */}
+      <BottomSheet
+        isOpen={showHelp}
+        onClose={() => setShowHelp(false)}
+        title="Analyzing your starter"
+      >
+        <div className="space-y-5">
+          <p className="text-sm text-crust-600 dark:text-crumb-400">
+            Take a photo of your starter and get a read on how active and ready
+            it looks. Here's how it works:
+          </p>
+
+          {/* Steps */}
+          <ol className="space-y-3">
+            {[
+              { n: 1, t: 'Tap "Analyze"', d: 'On this starter\'s page, tap the Analyze button.' },
+              { n: 2, t: 'Add a photo', d: 'Take a photo or pick one from your gallery — a clear, well-lit shot of the surface works best.' },
+              { n: 3, t: 'Get your results', d: 'You\'ll see scores plus a few observations and suggestions, saved to this starter.' },
+            ].map((s) => (
+              <li key={s.n} className="flex gap-3">
+                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-honey-100 dark:bg-honey-900/30 text-honey-700 dark:text-honey-400 text-xs font-semibold flex items-center justify-center">
+                  {s.n}
+                </span>
+                <div>
+                  <p className="font-medium text-crust-800 dark:text-crumb-100">{s.t}</p>
+                  <p className="text-sm text-crust-600 dark:text-crumb-400">{s.d}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+
+          {/* Two methods */}
+          <div className="space-y-3">
+            <div className="rounded-xl border border-crumb-200 dark:border-crust-700 p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Cpu className="w-4 h-4 text-honey-500" />
+                <p className="font-medium text-crust-800 dark:text-crumb-100">
+                  Quick estimate <span className="text-success-600 dark:text-success-400">· free</span>
+                </p>
+              </div>
+              <p className="text-sm text-crust-600 dark:text-crumb-400">
+                Runs entirely on your device — no account, no internet needed. It looks at
+                bubble activity and surface texture to estimate how active your starter is.
+                It's a rough guide, not a verdict.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-crumb-200 dark:border-crust-700 p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Sparkles className="w-4 h-4 text-honey-500" />
+                <p className="font-medium text-crust-800 dark:text-crumb-100">
+                  Deep analysis (Claude) <span className="text-crust-500 dark:text-crumb-500">· needs a key</span>
+                </p>
+              </div>
+              <p className="text-sm text-crust-600 dark:text-crumb-400">
+                Sends the photo to Claude for richer, more detailed advice. Add an Anthropic
+                API key in Settings to unlock it — it costs a fraction of a cent per analysis.
+              </p>
+              {!hasClaudeKey && (
+                <p className="mt-2 text-sm text-crust-500 dark:text-crumb-500 flex items-center gap-1.5">
+                  <KeyRound className="w-3.5 h-3.5" />
+                  Settings → AI Features → add your API key
+                </p>
+              )}
+            </div>
+          </div>
+
+          <p className="text-xs text-crust-500 dark:text-crumb-500">
+            Tip: a photo taken a few hours after feeding (when it's rising) gives the most
+            useful read. Always confirm with a float test before baking.
+          </p>
+
+          <Button fullWidth onClick={() => setShowHelp(false)}>
+            Got it
+          </Button>
+        </div>
+      </BottomSheet>
 
       {/* Photo source + method picker for analysis */}
       <ActionSheet
