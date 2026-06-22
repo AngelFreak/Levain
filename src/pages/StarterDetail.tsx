@@ -16,6 +16,7 @@ import {
   HelpCircle,
   KeyRound,
   Cpu,
+  FlaskConical,
 } from 'lucide-react';
 import { Card, Button, ActionSheet, Badge, BottomSheet } from '../components/ui';
 import { ConfirmModal } from '../components/ui/Modal';
@@ -608,9 +609,37 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
             </div>
           </div>
 
+          {/* What's a float test */}
+          <div className="rounded-xl bg-honey-50 dark:bg-honey-900/20 p-3">
+            <div className="flex items-center gap-2 mb-1.5">
+              <FlaskConical className="w-4 h-4 text-honey-600 dark:text-honey-400" />
+              <p className="font-medium text-crust-800 dark:text-crumb-100">
+                What's a float test?
+              </p>
+            </div>
+            <p className="text-sm text-crust-600 dark:text-crumb-400">
+              A quick way to check if your starter is ready: drop a small spoonful into a glass
+              of room-temperature water.
+            </p>
+            <ul className="mt-2 space-y-1 text-sm">
+              <li className="flex gap-2 text-crust-700 dark:text-crumb-300">
+                <span className="text-success-600 dark:text-success-400">●</span>
+                <span><strong>Floats</strong> — it's full of gas and active. Good to bake.</span>
+              </li>
+              <li className="flex gap-2 text-crust-700 dark:text-crumb-300">
+                <span className="text-warning-600 dark:text-warning-400">●</span>
+                <span><strong>Sinks</strong> — not enough rise yet. Give it more time, or feed it and wait.</span>
+              </li>
+            </ul>
+            <p className="mt-2 text-xs text-crust-500 dark:text-crumb-500">
+              It's a handy guide, not foolproof — stiff or very wet starters can fool it, and
+              stirring the sample first lets the gas escape.
+            </p>
+          </div>
+
           <p className="text-xs text-crust-500 dark:text-crumb-500">
             Tip: a photo taken a few hours after feeding (when it's rising) gives the most
-            useful read. Always confirm with a float test before baking.
+            useful read.
           </p>
 
           <Button fullWidth onClick={() => setShowHelp(false)}>
