@@ -389,7 +389,18 @@ export interface StarterAnalysisContext {
   flourType: string;
   /** Hours since the last recorded feeding, if known. */
   hoursSinceFeed?: number;
+  /** Ambient temperature in °C; shifts the time-to-peak windows. */
+  ambientTemp?: number;
 }
+
+/** Stage of the post-feeding cycle. See src/lib/starterStages.ts. */
+export type StarterStage =
+  | 'just_fed'
+  | 'rising'
+  | 'peak'
+  | 'falling'
+  | 'hungry'
+  | 'unknown';
 
 export interface StarterAnalysis extends AIAnalysis {
   type: 'starter';
@@ -400,6 +411,10 @@ export interface StarterAnalysis extends AIAnalysis {
   };
   estimatedHoursSinceFeed: string;
   readyToBake: boolean;
+  /** Current feeding-cycle stage, when determinable. */
+  stage?: StarterStage;
+  /** Human label for the stage, e.g. "Peak — bake now". */
+  stageLabel?: string;
 }
 
 export interface CrumbAnalysis extends AIAnalysis {

@@ -11,6 +11,7 @@
 
 import type { PhotoBase64 } from './photos';
 import type { StarterAnalysis, StarterAnalysisContext } from '../types';
+import { classifyStage } from './starterStages';
 
 /** Raw image signals extracted from the photo. */
 interface ImageSignals {
@@ -150,22 +151,31 @@ export async function analyzeStarterLocal(
     health = clamp(health - 10, 0, 100);
   }
 
-  // --- Readiness --------------------------------------------------------------
-  // Readiness needs activity AND a sensible feed window. Freshly fed (<3h) or
-  // long-unfed (>24h) starters aren't "ready to bake" even if bubbly.
-  let readiness = activity;
+  // --- Stage & readiness ------------------------------------------------------
+  // The feeding-cycle STAGE is the source of truth for readiness — not raw
+  // "bubbliness". classifyStage() combines time-since-feed (temperature
+  // adjusted) with the photo signals, so a bubbly-but-just-fed starter is
+  // correctly NOT ready (it's still rising, not at peak). See starterStages.ts.
   const hsf = ctx.hoursSinceFeed;
-  if (hsf !== undefined) {
-    if (hsf < 3) readiness = clamp(readiness - 35, 0, 100); // too soon after feed
-    else if (hsf > 24) readiness = clamp(readiness - 30, 0, 100); // likely past peak / hungry
-    else if (hsf >= 4 && hsf <= 12) readiness = clamp(readiness + 10, 0, 100); // sweet spot
-  }
-  // A very young starter (first ~7 days) is rarely bake-ready regardless.
-  if (ctx.ageDays < 7) readiness = clamp(readiness - 25, 0, 100);
+  const stageResult = classifyStage(ctx, {
+    edgeDensity: sig.edgeDensity,
+    roughness: sig.roughness,
+    darkRatio: sig.darkRatio,
+  });
+  const readyToBake = stageResult.readyToBake;
 
-  const readyToBake = readiness >= 60;
+  // Readiness rating reflects the stage, not just activity: only peak is high.
+  const readiness =
+    stageResult.stage === 'peak'
+      ? Math.max(60, activity)
+      : stageResult.stage === 'rising' || stageResult.stage === 'falling'
+        ? Math.min(55, activity)
+        : Math.min(35, activity);
 
-  // --- Observations & suggestions --------------------------------------------
+  // Young cultures (first week) aren't reliably bake-ready even at "peak".
+  const tooYoung = ctx.ageDays < 7;
+
+  // --- Observations -----------------------------------------------------------
   const observations: string[] = [];
   if (sig.edgeDensity > 0.12) observations.push('Plenty of bubble activity visible across the surface.');
   else if (sig.edgeDensity > 0.05) observations.push('Some bubbling visible, but not heavily active.');
@@ -177,35 +187,27 @@ export async function analyzeStarterLocal(
   if (sig.darkRatio > 0.3) observations.push('Noticeable dark/uniform areas — possibly hooch or a deflated top.');
   if (sig.brightness < 0.2) observations.push('Photo is quite dark — brighter lighting would improve this estimate.');
 
-  const suggestions: string[] = [];
-  if (hsf !== undefined && hsf < 3) {
-    suggestions.push('Recently fed — give it a few more hours to develop before baking.');
-  }
-  if (hsf !== undefined && hsf > 24) {
-    suggestions.push('It has been a while since the last feed — feed it and wait for it to peak.');
-  }
+  // --- Suggestions: lead with the stage advice, then add specifics -----------
+  const suggestions: string[] = [stageResult.advice];
   if (sig.darkRatio > 0.3) {
     suggestions.push('If you see liquid (hooch), stir it in or pour it off, then feed.');
   }
-  if (readyToBake) {
-    suggestions.push('Looks active — a float test will confirm it is ready to bake.');
-  } else if (activity < 40) {
-    suggestions.push('Low activity — feed on a regular schedule and keep it warm (24-26°C).');
+  if (tooYoung && stageResult.stage === 'peak') {
+    suggestions.push('This starter is still young — give it a week or two of regular feeding to fully establish.');
   }
-  if (suggestions.length === 0) {
-    suggestions.push('Keep up a consistent feeding routine and watch for it to roughly double.');
+  if (activity < 40 && (stageResult.stage === 'peak' || stageResult.stage === 'rising')) {
+    suggestions.push('Activity looks low for this point in the cycle — keep it warm (24-26°C) and feed regularly.');
   }
 
-  const summary = readyToBake
-    ? 'Quick estimate: the starter looks active and may be ready to bake. Confirm with a float test.'
-    : activity >= 45
-      ? 'Quick estimate: moderate activity — developing but give it more time or another feed.'
-      : 'Quick estimate: low visible activity — likely needs feeding and a warm spot.';
+  // Summary is the stage label + its advice — one honest, stage-aware sentence.
+  const summary = `Quick estimate — ${stageResult.label.toLowerCase()}. ${stageResult.advice}`;
 
   const analysis: StarterAnalysis = {
     timestamp: new Date(),
     type: 'starter',
     source: 'on-device',
+    stage: stageResult.stage,
+    stageLabel: stageResult.label,
     summary,
     scores: {
       activity: toRating(activity),
@@ -214,7 +216,8 @@ export async function analyzeStarterLocal(
     },
     estimatedHoursSinceFeed:
       hsf !== undefined ? `~${Math.round(hsf)} hours (from your log)` : 'unknown',
-    readyToBake,
+    // A young starter shouldn't be reported bake-ready even at peak.
+    readyToBake: readyToBake && !tooYoung,
     observations,
     suggestions,
     confidence: 'low',

@@ -16,6 +16,7 @@ import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema';
 import { useSettingsStore } from '../stores/settingsStore';
 import type { PhotoBase64 } from './photos';
 import type { StarterAnalysis, StarterAnalysisContext } from '../types';
+import { classifyStage } from './starterStages';
 
 // Re-exported for callers that import the context type from here.
 export type { StarterAnalysisContext } from '../types';
@@ -108,18 +109,33 @@ function buildPrompt(ctx: StarterAnalysisContext): string {
     ctx.hoursSinceFeed === undefined
       ? 'unknown time since last feeding'
       : `about ${Math.round(ctx.hoursSinceFeed)} hours since last feeding`;
+  const temp =
+    ctx.ambientTemp === undefined ? 'unknown' : `about ${Math.round(ctx.ambientTemp)}°C`;
+
+  // Time/temperature-based stage hint from the shared model (no photo signals —
+  // Claude judges the photo itself, but this anchors the feed-cycle framing).
+  const stageHint = classifyStage(ctx);
+  const stageLine =
+    stageHint.stage === 'unknown'
+      ? 'No feed time logged, so the feeding-cycle stage is unknown from timing alone.'
+      : `Based on time since feeding and temperature, the starter is likely in its "${stageHint.label}" stage. Use the photo to confirm or correct this.`;
+
   return [
     'You are an expert sourdough baker assessing a sourdough starter from a photo.',
     'Judge fermentation activity, health, and readiness to bake.',
+    '',
+    'A fed starter passes through stages: just-fed (weakest) → rising → peak (best to bake) → falling/past-peak → hungry (collapsed, may show hooch). A starter is only "ready to bake" at or just before its peak — a freshly-fed starter is NOT ready even if it already shows bubbles.',
     '',
     'Context about this starter:',
     `- Age: ${ctx.ageDays} day(s) old`,
     `- Hydration: ${ctx.hydration}%`,
     `- Primary flour: ${ctx.flourType}`,
     `- Feeding: ${fed}`,
+    `- Ambient temperature: ${temp}`,
+    `- ${stageLine}`,
     '',
     'Look at rise/dome, bubble size and distribution, surface texture, and any liquid (hooch).',
-    'Score activity, health, and readiness from 0 to 100. Be specific and practical in observations and suggestions.',
+    'Score activity, health, and readiness from 0 to 100. Set readyToBake true only if it is at/just-before peak. Be specific and practical in observations and suggestions.',
   ].join('\n');
 }
 
@@ -178,10 +194,23 @@ export async function analyzeStarter(
     throw new Error('Claude returned an unexpected response. Please try again.');
   }
 
+  // Stage for the badge: prefer the time/temp-based hint; if timing is unknown
+  // but Claude judged it bake-ready from the photo, treat that as peak.
+  const stageHint = classifyStage(ctx);
+  const stage =
+    stageHint.stage !== 'unknown'
+      ? stageHint.stage
+      : parsed.readyToBake
+        ? 'peak'
+        : 'unknown';
+  const stageLabel = stage === 'peak' && stageHint.stage === 'unknown' ? 'Peak — bake now' : stageHint.label;
+
   const analysis: StarterAnalysis = {
     timestamp: new Date(),
     type: 'starter',
     source: 'claude',
+    stage,
+    stageLabel,
     summary: parsed.summary,
     scores: {
       activity: toRating(parsed.activity),

@@ -28,6 +28,7 @@ import { formatTime } from '../lib/fermentation';
 import { takePhoto, photoToBase64 } from '../lib/photos';
 import { analyzeStarter, MissingApiKeyError } from '../lib/claude';
 import { analyzeStarterLocal } from '../lib/starterVision';
+import { stageBadgeVariant } from '../lib/starterStages';
 import { differenceInDays } from 'date-fns';
 import type { Starter, Feeding } from '../types';
 import { formatDistanceToNow, format } from 'date-fns';
@@ -113,6 +114,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
         hydration: starter.hydration,
         flourType: starter.flourType,
         hoursSinceFeed,
+        ambientTemp: settings.defaultAmbientTemp,
       };
 
       const { analysis, healthScore } =
@@ -367,7 +369,12 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
                 <Sparkles className="w-4 h-4 text-honey-500" />
                 {starter.lastAnalysis.source === 'claude' ? 'Claude Analysis' : 'Quick Estimate'}
               </h3>
-              {starter.lastAnalysis.readyToBake ? (
+              {starter.lastAnalysis.stage && starter.lastAnalysis.stageLabel ? (
+                <Badge variant={stageBadgeVariant(starter.lastAnalysis.stage)}>
+                  {starter.lastAnalysis.readyToBake && <CheckCircle2 className="w-3 h-3" />}
+                  {starter.lastAnalysis.stageLabel}
+                </Badge>
+              ) : starter.lastAnalysis.readyToBake ? (
                 <Badge variant="success">
                   <CheckCircle2 className="w-3 h-3" />
                   Ready to bake
