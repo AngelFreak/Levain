@@ -15,9 +15,17 @@ import Anthropic from '@anthropic-ai/sdk';
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema';
 import { useSettingsStore } from '../stores/settingsStore';
 import type { PhotoBase64 } from './photos';
-import type { StarterAnalysis } from '../types';
+import type { StarterAnalysis, StarterAnalysisContext } from '../types';
 
-const MODEL = 'claude-opus-4-8';
+// Re-exported for callers that import the context type from here.
+export type { StarterAnalysisContext } from '../types';
+
+// Cloud "deep analysis" model. Haiku 4.5 is the cheapest Claude vision model
+// and is well-suited to single-image scoring + short advice; a single starter
+// analysis costs a fraction of a cent. The free on-device path
+// (src/lib/starterVision.ts) remains the default, so this only runs when the
+// user opts in with their own API key.
+const MODEL = 'claude-haiku-4-5';
 
 /** Thrown when analysis is attempted without an API key configured. */
 export class MissingApiKeyError extends Error {
@@ -53,15 +61,6 @@ export async function testApiKey(): Promise<boolean> {
     messages: [{ role: 'user', content: 'ping' }],
   });
   return true;
-}
-
-export interface StarterAnalysisContext {
-  /** Whole days since the starter was first created (from createdDate). */
-  ageDays: number;
-  hydration: number;
-  flourType: string;
-  /** Hours since the last recorded feeding, if known. */
-  hoursSinceFeed?: number;
 }
 
 // JSON schema mirroring StarterAnalysis. Scores are 0-100 integers; the
@@ -182,6 +181,7 @@ export async function analyzeStarter(
   const analysis: StarterAnalysis = {
     timestamp: new Date(),
     type: 'starter',
+    source: 'claude',
     summary: parsed.summary,
     scores: {
       activity: toRating(parsed.activity),

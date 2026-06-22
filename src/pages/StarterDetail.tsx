@@ -23,6 +23,7 @@ import { db } from '../lib/db';
 import { formatTime } from '../lib/fermentation';
 import { takePhoto, photoToBase64 } from '../lib/photos';
 import { analyzeStarter, MissingApiKeyError } from '../lib/claude';
+import { analyzeStarterLocal } from '../lib/starterVision';
 import { differenceInDays } from 'date-fns';
 import type { Starter, Feeding } from '../types';
 import { formatDistanceToNow, format } from 'date-fns';
@@ -34,6 +35,7 @@ interface StarterDetailPageProps {
 export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
   const { goBackFromPage, openModal, showToast } = useAppStore();
   const { settings } = useSettingsStore();
+  const hasClaudeKey = Boolean(settings.claudeApiKey?.trim());
   const [starter, setStarter] = useState<Starter | null>(null);
   const [feedings, setFeedings] = useState<Feeding[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -79,7 +81,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
     }
   };
 
-  const handleAnalyze = async (source: 'camera' | 'gallery') => {
+  const handleAnalyze = async (source: 'camera' | 'gallery', method: 'local' | 'claude') => {
     if (!starter?.id) return;
 
     setIsAnalyzing(true);
@@ -101,17 +103,24 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
       const hoursSinceFeed = starter.lastFed
         ? (Date.now() - new Date(starter.lastFed).getTime()) / (1000 * 60 * 60)
         : undefined;
-
-      const { analysis, healthScore } = await analyzeStarter(base64, {
+      const ctx = {
         ageDays,
         hydration: starter.hydration,
         flourType: starter.flourType,
         hoursSinceFeed,
-      });
+      };
+
+      const { analysis, healthScore } =
+        method === 'claude'
+          ? await analyzeStarter(base64, ctx)
+          : await analyzeStarterLocal(base64, ctx);
 
       await db.starters.update(starter.id, { healthScore, lastAnalysis: analysis });
       setStarter({ ...starter, healthScore, lastAnalysis: analysis });
-      showToast('Starter analyzed!', 'success');
+      showToast(
+        method === 'claude' ? 'Analyzed with Claude!' : 'Quick estimate ready!',
+        'success'
+      );
     } catch (error) {
       if (error instanceof MissingApiKeyError) {
         showToast(error.message, 'error');
@@ -120,7 +129,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
         const message =
           error instanceof Error && error.message
             ? error.message
-            : 'Analysis failed. Check your API key and connection.';
+            : 'Analysis failed. Please try again.';
         showToast(message, 'error');
       }
     } finally {
@@ -344,7 +353,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium text-crust-600 dark:text-crumb-400 flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-honey-500" />
-                AI Analysis
+                {starter.lastAnalysis.source === 'claude' ? 'Claude Analysis' : 'Quick Estimate'}
               </h3>
               {starter.lastAnalysis.readyToBake ? (
                 <Badge variant="success">
@@ -389,9 +398,16 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
             )}
 
             <p className="text-xs text-crust-500 dark:text-crumb-500 mt-3">
-              {starter.lastAnalysis.confidence} confidence · analyzed{' '}
-              {formatDistanceToNow(new Date(starter.lastAnalysis.timestamp))} ago
+              {starter.lastAnalysis.source === 'on-device'
+                ? 'On-device estimate'
+                : `${starter.lastAnalysis.confidence} confidence`}{' '}
+              · analyzed {formatDistanceToNow(new Date(starter.lastAnalysis.timestamp))} ago
             </p>
+            {starter.lastAnalysis.source === 'on-device' && !hasClaudeKey && (
+              <p className="text-xs text-crust-400 dark:text-crumb-600 mt-1">
+                Add a Claude API key in Settings for richer, photo-based advice.
+              </p>
+            )}
           </Card>
         </motion.div>
       )}
@@ -514,22 +530,36 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
         onSave={(updatedStarter) => setStarter(updatedStarter)}
       />
 
-      {/* Photo source picker for AI analysis */}
+      {/* Photo source + method picker for analysis */}
       <ActionSheet
         isOpen={showPhotoSheet}
         onClose={() => setShowPhotoSheet(false)}
         title="Analyze starter health"
         actions={[
           {
-            label: 'Take Photo',
+            label: 'Quick estimate · Take Photo',
             icon: <Camera className="w-5 h-5" />,
-            onClick: () => handleAnalyze('camera'),
+            onClick: () => handleAnalyze('camera', 'local'),
           },
           {
-            label: 'Choose from Gallery',
+            label: 'Quick estimate · From Gallery',
             icon: <ImageIcon className="w-5 h-5" />,
-            onClick: () => handleAnalyze('gallery'),
+            onClick: () => handleAnalyze('gallery', 'local'),
           },
+          ...(hasClaudeKey
+            ? [
+                {
+                  label: 'Deep analysis (Claude) · Take Photo',
+                  icon: <Sparkles className="w-5 h-5" />,
+                  onClick: () => handleAnalyze('camera', 'claude'),
+                },
+                {
+                  label: 'Deep analysis (Claude) · From Gallery',
+                  icon: <Sparkles className="w-5 h-5" />,
+                  onClick: () => handleAnalyze('gallery', 'claude'),
+                },
+              ]
+            : []),
         ]}
       />
     </div>

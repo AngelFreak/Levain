@@ -372,6 +372,23 @@ export interface AIAnalysis {
   observations: string[];
   suggestions: string[];
   confidence: 'high' | 'medium' | 'low';
+  /**
+   * Which analyzer produced this result:
+   * 'on-device' = free heuristic computer-vision (no API key, offline);
+   * 'claude'    = Claude vision (richer, needs an API key).
+   * Optional for backward-compat with pre-existing records.
+   */
+  source?: 'on-device' | 'claude';
+}
+
+/** Context passed to either starter analyzer (Claude or on-device). */
+export interface StarterAnalysisContext {
+  /** Whole days since the starter was first created (from createdDate). */
+  ageDays: number;
+  hydration: number;
+  flourType: string;
+  /** Hours since the last recorded feeding, if known. */
+  hoursSinceFeed?: number;
 }
 
 export interface StarterAnalysis extends AIAnalysis {
