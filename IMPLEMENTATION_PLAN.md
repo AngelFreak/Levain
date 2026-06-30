@@ -418,7 +418,28 @@ works in modals; no critical contrast failures on core flows.
 **Tests:** screen-reader labels present; focus traversal in modals; contrast
 audit passes on Home/Starters/Book.
 
-**Status:** Not Started
+**Status:** Complete — audited every interactive control (two Explore passes over
+pages + modals). Added accessible names to all icon-only controls: Home settings,
+StarterDetail edit/delete, BakeDetail edit/delete + favorite toggle, RecipeDetail
+edit/delete/fork + favorite toggle, the `NumberInput` +/− steppers (`Input.tsx`),
+EditBakeModal photo/tag add+remove, Add/EditRecipeModal photo/flour/addition/step
+remove buttons. Favorite/star controls are now real toggles (`aria-pressed` +
+state-aware label, e.g. "Add to favorites" ↔ "Remove from favorites"). The three
+star-rating widgets (ActiveBakePage, StartBakeModal, EditBakeModal `StarPicker`)
+became labeled `role="group"`s with per-star `aria-label`/`aria-pressed` and
+`aria-hidden` on the decorative `<Star>`; `StarPicker` takes a `label` prop so each
+reads "Crust: 3 stars" etc. The Recipes grid favorite badge is `role="img"
+aria-label="Favorite"`. Shared dialogs (`Modal`, `BottomSheet`) now carry
+`role="dialog"`, `aria-modal="true"`, and `aria-labelledby` tied to the title via
+`useId`; `Modal`'s close button got `aria-label="Close"`. `BottomSheet` gained an
+Escape-to-close handler (previously dismissible only by drag/overlay — no keyboard
+path). Verified live with Playwright at 390×844: Home 0 unnamed buttons; the
+"Add New Starter" sheet exposes `role=dialog`/`aria-modal`/`aria-labelledby`→
+heading with 0 unnamed of its 11 buttons; Escape closes it. tsc clean, build
+green, eslint unchanged (25 problems, all pre-existing — zero new, proven via
+`git stash` baseline diff).
+
+**Status:** Complete
 
 ---
 

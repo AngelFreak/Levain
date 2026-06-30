@@ -345,15 +345,18 @@ export function StartBakeModal({ isOpen, onClose }: StartBakeModalProps) {
                 <label className="block text-xs font-medium text-crust-700 dark:text-crumb-200 mb-2">
                   Overall Rating
                 </label>
-                <div className="flex gap-2 justify-center">
+                <div className="flex gap-2 justify-center" role="group" aria-label="Overall rating">
                   {([1, 2, 3, 4, 5] as Rating[]).map((star) => (
                     <button
                       key={star}
                       type="button"
                       onClick={() => setOverallRating(star)}
+                      aria-label={`${star} star${star > 1 ? 's' : ''}`}
+                      aria-pressed={star <= overallRating}
                       className="p-1 touch-target"
                     >
                       <Star
+                        aria-hidden="true"
                         className={`w-8 h-8 transition-colors ${
                           star <= overallRating
                             ? 'fill-honey-500 text-honey-500'

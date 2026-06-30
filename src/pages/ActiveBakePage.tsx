@@ -422,14 +422,17 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
               <p className="text-sm text-crust-600 dark:text-crumb-400 mb-2 text-center">
                 Rate your bake
               </p>
-              <div className="flex justify-center gap-2">
+              <div className="flex justify-center gap-2" role="group" aria-label="Rate your bake">
                 {([1, 2, 3, 4, 5] as Rating[]).map((star) => (
                   <button
                     key={star}
                     onClick={() => setRating(star)}
+                    aria-label={`${star} star${star > 1 ? 's' : ''}`}
+                    aria-pressed={star <= rating}
                     className="p-1 transition-transform hover:scale-110"
                   >
                     <Star
+                      aria-hidden="true"
                       className={`w-8 h-8 ${
                         star <= rating
                           ? 'fill-honey-500 text-honey-500'

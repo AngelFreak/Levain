@@ -155,8 +155,8 @@ export function RecipesPage() {
 
                   {/* Favorite badge */}
                   {recipe.isFavorite && (
-                    <div className="absolute top-2 right-2">
-                      <Star className="w-5 h-5 fill-honey-500 text-honey-500 drop-shadow" />
+                    <div className="absolute top-2 right-2" role="img" aria-label="Favorite">
+                      <Star className="w-5 h-5 fill-honey-500 text-honey-500 drop-shadow" aria-hidden="true" />
                     </div>
                   )}
                 </div>

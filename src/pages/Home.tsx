@@ -63,6 +63,7 @@ export function HomePage() {
         </div>
         <button
           onClick={() => setActiveTab('settings')}
+          aria-label="Open settings"
           className="w-10 h-10 rounded-full bg-crumb-100 dark:bg-crust-800 text-crust-600 dark:text-crumb-400 flex items-center justify-center"
         >
           <Settings className="w-5 h-5" />

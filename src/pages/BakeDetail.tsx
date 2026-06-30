@@ -205,19 +205,26 @@ export function BakeDetailPage({ bakeId }: BakeDetailPageProps) {
             Back
           </Button>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" onClick={() => setShowEdit(true)} title="Edit bake">
+            <Button variant="ghost" size="sm" onClick={() => setShowEdit(true)} aria-label="Edit bake" title="Edit bake">
               <Pencil className="w-5 h-5" />
             </Button>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setShowDeleteConfirm(true)}
+              aria-label="Delete bake"
               title="Delete bake"
               className="text-error-500 hover:text-error-600"
             >
               <Trash2 className="w-5 h-5" />
             </Button>
-            <Button variant="ghost" size="sm" onClick={toggleFavorite}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleFavorite}
+              aria-pressed={bake.isFavorite}
+              aria-label={bake.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+            >
               <Star className={`w-5 h-5 ${bake.isFavorite ? 'fill-honey-500 text-honey-500' : ''}`} />
             </Button>
           </div>

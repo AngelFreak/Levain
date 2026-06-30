@@ -317,12 +317,14 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
           </button>
           <button
             onClick={() => setShowEditModal(true)}
+            aria-label="Edit starter"
             className="p-2 rounded-full hover:bg-crumb-100 dark:hover:bg-crust-800"
           >
             <Edit2 className="w-5 h-5 text-crust-600 dark:text-crumb-400" />
           </button>
           <button
             onClick={() => setShowDeleteConfirm(true)}
+            aria-label="Delete starter"
             className="p-2 rounded-full hover:bg-error-50 dark:hover:bg-error-950/20"
           >
             <Trash2 className="w-5 h-5 text-error-500" />

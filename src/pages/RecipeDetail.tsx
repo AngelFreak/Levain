@@ -165,6 +165,7 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
                 variant="ghost"
                 size="sm"
                 onClick={() => setIsEditModalOpen(true)}
+                aria-label="Edit recipe"
                 title="Edit recipe"
               >
                 <Pencil className="w-5 h-5" />
@@ -176,6 +177,7 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowDeleteConfirm(true)}
+                aria-label="Delete recipe"
                 title="Delete recipe"
                 className="text-error-500 hover:text-error-600"
               >
@@ -188,6 +190,7 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
                 variant="ghost"
                 size="sm"
                 onClick={forkRecipe}
+                aria-label="Fork recipe"
                 title="Fork recipe to create your own copy"
               >
                 <Copy className="w-5 h-5" />
@@ -197,6 +200,8 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
               variant="ghost"
               size="sm"
               onClick={toggleFavorite}
+              aria-pressed={recipe.isFavorite}
+              aria-label={recipe.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
             >
               <Star className={`w-5 h-5 ${recipe.isFavorite ? 'fill-honey-500 text-honey-500' : ''}`} />
             </Button>

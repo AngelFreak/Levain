@@ -215,6 +215,7 @@ export function AddRecipeModal({ isOpen, onClose }: AddRecipeModalProps) {
               <button
                 type="button"
                 onClick={removePhoto}
+                aria-label="Remove recipe photo"
                 className="absolute top-2 right-2 p-1.5 bg-black/50 rounded-full text-white hover:bg-black/70 transition-colors"
               >
                 <X className="w-4 h-4" />
@@ -412,6 +413,7 @@ export function AddRecipeModal({ isOpen, onClose }: AddRecipeModalProps) {
                 <button
                   type="button"
                   onClick={() => removeFlour(index)}
+                  aria-label="Remove flour"
                   className="p-2 flex-shrink-0"
                 >
                   <Trash2 className="w-4 h-4 text-red-500" />
@@ -464,6 +466,7 @@ export function AddRecipeModal({ isOpen, onClose }: AddRecipeModalProps) {
                 <button
                   type="button"
                   onClick={() => removeAddition(index)}
+                  aria-label="Remove addition"
                   className="p-2 flex-shrink-0"
                 >
                   <Trash2 className="w-4 h-4 text-red-500" />
@@ -493,7 +496,7 @@ export function AddRecipeModal({ isOpen, onClose }: AddRecipeModalProps) {
                   <span className="text-sm font-medium text-crust-700 dark:text-crumb-200">
                     Step {step.order}
                   </span>
-                  <Button variant="ghost" size="sm" onClick={() => removeStep(index)}>
+                  <Button variant="ghost" size="sm" onClick={() => removeStep(index)} aria-label="Delete step">
                     <Trash2 className="w-4 h-4 text-red-500" />
                   </Button>
                 </div>

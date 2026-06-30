@@ -32,12 +32,28 @@ const RATING_FIELDS: Array<{ key: keyof Pick<Bake['results'], 'overall' | 'ovenS
   { key: 'sourness', label: 'Sourness' },
 ];
 
-function StarPicker({ value, onChange }: { value: Rating; onChange: (r: Rating) => void }) {
+function StarPicker({
+  value,
+  onChange,
+  label,
+}: {
+  value: Rating;
+  onChange: (r: Rating) => void;
+  label?: string;
+}) {
   return (
-    <div className="flex gap-1">
+    <div className="flex gap-1" role="group" aria-label={label ? `${label} rating` : 'Rating'}>
       {([1, 2, 3, 4, 5] as Rating[]).map((s) => (
-        <button key={s} type="button" onClick={() => onChange(s)} className="p-0.5">
+        <button
+          key={s}
+          type="button"
+          onClick={() => onChange(s)}
+          aria-label={`${label ? `${label}: ` : ''}${s} star${s > 1 ? 's' : ''}`}
+          aria-pressed={s <= value}
+          className="p-0.5"
+        >
           <Star
+            aria-hidden="true"
             className={`w-6 h-6 ${
               s <= value ? 'fill-honey-500 text-honey-500' : 'text-crumb-300 dark:text-crust-600'
             }`}
@@ -266,7 +282,7 @@ export function EditBakeModal({ isOpen, onClose, bakeId, onSave }: EditBakeModal
             {RATING_FIELDS.map(({ key, label }) => (
               <div key={key} className="flex items-center justify-between">
                 <span className="text-sm text-crust-700 dark:text-crumb-200">{label}</span>
-                <StarPicker value={ratings[key]} onChange={(r) => setRating(key, r)} />
+                <StarPicker value={ratings[key]} onChange={(r) => setRating(key, r)} label={label} />
               </div>
             ))}
           </div>
@@ -282,6 +298,7 @@ export function EditBakeModal({ isOpen, onClose, bakeId, onSave }: EditBakeModal
                 <button
                   type="button"
                   onClick={() => setPhotos(photos.filter((_, idx) => idx !== i))}
+                  aria-label={`Remove photo ${i + 1}`}
                   className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-error-500 text-white flex items-center justify-center"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -291,6 +308,7 @@ export function EditBakeModal({ isOpen, onClose, bakeId, onSave }: EditBakeModal
             <button
               type="button"
               onClick={() => handleAddPhoto('camera')}
+              aria-label="Take photo"
               className="w-20 h-20 rounded-xl border-2 border-dashed border-crumb-300 dark:border-crust-600 flex items-center justify-center text-crust-400"
             >
               <Camera className="w-6 h-6" />
@@ -298,6 +316,7 @@ export function EditBakeModal({ isOpen, onClose, bakeId, onSave }: EditBakeModal
             <button
               type="button"
               onClick={() => handleAddPhoto('gallery')}
+              aria-label="Choose from gallery"
               className="w-20 h-20 rounded-xl border-2 border-dashed border-crumb-300 dark:border-crust-600 flex items-center justify-center text-crust-400"
             >
               <ImageIcon className="w-6 h-6" />
@@ -315,7 +334,11 @@ export function EditBakeModal({ isOpen, onClose, bakeId, onSave }: EditBakeModal
                 className="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-crumb-100 dark:bg-crust-800 text-crust-700 dark:text-crumb-300 rounded-full"
               >
                 {tag}
-                <button type="button" onClick={() => setTags(tags.filter((t) => t !== tag))}>
+                <button
+                  type="button"
+                  onClick={() => setTags(tags.filter((t) => t !== tag))}
+                  aria-label={`Remove tag ${tag}`}
+                >
                   <X className="w-3 h-3" />
                 </button>
               </span>
@@ -333,7 +356,7 @@ export function EditBakeModal({ isOpen, onClose, bakeId, onSave }: EditBakeModal
                 }
               }}
             />
-            <Button variant="secondary" onClick={addTag} type="button">
+            <Button variant="secondary" onClick={addTag} type="button" aria-label="Add tag">
               <Plus className="w-4 h-4" />
             </Button>
           </div>
