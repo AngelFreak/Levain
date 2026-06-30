@@ -31,6 +31,8 @@ export function BookPage() {
   const [bakes, setBakes] = useState<Bake[]>([]);
   const [bakesLoading, setBakesLoading] = useState(true);
   const [bakesFilter, setBakesFilter] = useState<'all' | 'favorites'>('all');
+  const [journalSearch, setJournalSearch] = useState('');
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
   // Recipes state
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -40,6 +42,21 @@ export function BookPage() {
 
   // Legacy compatibility
   const isLoading = activeTab === 'journal' ? bakesLoading : recipesLoading;
+
+  // Tags present across all loaded bakes, for the filter row.
+  const allTags = Array.from(new Set(bakes.flatMap((b) => b.tags))).sort();
+
+  // Client-side search (name/notes/tags) + tag filter over the loaded bakes,
+  // mirroring the recipe search above.
+  const filteredBakes = bakes.filter((b) => {
+    if (selectedTag && !b.tags.includes(selectedTag)) return false;
+    if (journalSearch) {
+      const q = journalSearch.toLowerCase();
+      const hay = [b.recipeName, b.notes, ...b.tags].join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
 
   // Load bakes
   useEffect(() => {
@@ -337,6 +354,45 @@ export function BookPage() {
               </button>
             </div>
 
+            {/* Journal search */}
+            <div className="mb-2">
+              <Input
+                placeholder="Search bakes, notes, tags…"
+                value={journalSearch}
+                onChange={(e) => setJournalSearch(e.target.value)}
+                leftIcon={<Search className="w-4 h-4" />}
+              />
+            </div>
+
+            {/* Tag filter chips */}
+            {allTags.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-2 mb-2">
+                <button
+                  onClick={() => setSelectedTag(null)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                    selectedTag === null
+                      ? 'bg-crust-600 text-white'
+                      : 'bg-crumb-200 dark:bg-crust-700 text-crust-600 dark:text-crumb-300'
+                  }`}
+                >
+                  All tags
+                </button>
+                {allTags.map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                      selectedTag === tag
+                        ? 'bg-crust-600 text-white'
+                        : 'bg-crumb-200 dark:bg-crust-700 text-crust-600 dark:text-crumb-300'
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            )}
+
       {/* Stats Summary */}
       {bakes.length > 0 && (
         <motion.div
@@ -385,9 +441,9 @@ export function BookPage() {
             />
           ))}
         </div>
-      ) : bakes.length > 0 ? (
+      ) : filteredBakes.length > 0 ? (
         <div className="space-y-4">
-          {bakes.map((bake, index) => (
+          {filteredBakes.map((bake, index) => (
             <motion.div
               key={bake.id}
               initial={{ opacity: 0, y: 20 }}
@@ -458,6 +514,30 @@ export function BookPage() {
             </motion.div>
           ))}
         </div>
+      ) : bakes.length > 0 ? (
+        // Bakes exist, but none match the current search/tag filter.
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
+          <Card padding="lg" className="text-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-crumb-100 dark:bg-crust-800 flex items-center justify-center">
+              <Search className="w-8 h-8 text-crust-500 dark:text-crumb-400" />
+            </div>
+            <h3 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-2">
+              No matching bakes
+            </h3>
+            <p className="text-crust-600 dark:text-crumb-400 mb-4">
+              Try a different search or tag.
+            </p>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setJournalSearch('');
+                setSelectedTag(null);
+              }}
+            >
+              Clear filters
+            </Button>
+          </Card>
+        </motion.div>
       ) : (
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}

@@ -294,7 +294,14 @@ comparison (review). Mirrors the existing recipe-search pattern in `Book.tsx`.
 
 **Tests:** search matches name/notes/tags; tag filter narrows; empty states ok.
 
-**Status:** Not Started
+**Status:** Complete — Book journal now has a search box (matches name/notes/tags)
+and a tag-chip filter row (union of all bake tags), mirroring the recipe-search
+pattern. `filteredBakes` derives client-side from the loaded bakes; a distinct
+"No matching bakes" empty state (with Clear filters) is shown when filters hide
+everything, separate from the "No bakes logged yet" first-run state. Verified in
+browser: "rye" → only Rye; "chewy" (notes-only) → only Pizza; weekend tag →
+Pizza+Country not Rye; no-match shows the matching empty state; clear restores
+all. tsc+build clean, zero new lint errors.
 
 ---
 
