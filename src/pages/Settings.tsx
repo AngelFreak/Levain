@@ -7,25 +7,46 @@ import {
   Scale,
   Thermometer,
   Download,
+  Upload,
   Trash2,
   ChevronRight,
   Sparkles,
   Clock,
   BatteryWarning,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { Card, Input, Slider, BottomSheetSelect, Button } from '../components/ui';
 import { useSettingsStore } from '../stores/settingsStore';
 import { testApiKey } from '../lib/claude';
 import { ConfirmModal } from '../components/ui/Modal';
 import { db } from '../lib/db';
+import {
+  exportAllData,
+  saveAndShareBackup,
+  estimateBackupSize,
+  formatBytes,
+  pickAndReadBackupFile,
+  parseBackup,
+  importAllData,
+  BackupValidationError,
+  type BackupFile,
+  type ImportMode,
+} from '../lib/backup';
+import { useAppStore } from '../stores/appStore';
 import { Capacitor } from '@capacitor/core';
 import BatteryOptimization from '../lib/batteryOptimization';
 import type { UserSettings } from '../types';
 
 export function SettingsPage() {
   const { settings, updateSetting, resetSettings } = useSettingsStore();
+  const { showToast } = useAppStore();
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showDeleteDataConfirm, setShowDeleteDataConfirm] = useState(false);
+  const [includePhotos, setIncludePhotos] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
+  // Pending import awaiting a merge/replace choice.
+  const [pendingImport, setPendingImport] = useState<BackupFile | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
   const [keyTest, setKeyTest] = useState<{ status: 'idle' | 'testing' | 'ok' | 'fail'; message?: string }>({
     status: 'idle',
   });
@@ -43,30 +64,51 @@ export function SettingsPage() {
   };
 
   const handleExportData = async () => {
-    const starters = await db.starters.toArray();
-    const feedings = await db.feedings.toArray();
-    const recipes = await db.recipes.toArray();
-    const bakes = await db.bakes.toArray();
+    setIsExporting(true);
+    try {
+      const backup = await exportAllData(includePhotos);
+      const size = estimateBackupSize(backup);
+      const where = await saveAndShareBackup(backup);
+      showToast(`${where} (${formatBytes(size)})`, 'success');
+    } catch (error) {
+      console.error('Export failed:', error);
+      showToast('Export failed. Please try again.', 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
-    const data = {
-      exportDate: new Date().toISOString(),
-      version: '1.0',
-      starters,
-      feedings,
-      recipes,
-      bakes,
-      settings,
-    };
+  const handlePickImport = async () => {
+    try {
+      const text = await pickAndReadBackupFile();
+      if (!text) return; // cancelled
+      const backup = parseBackup(text);
+      setPendingImport(backup); // opens the merge/replace chooser
+    } catch (error) {
+      const message =
+        error instanceof BackupValidationError
+          ? error.message
+          : 'Could not read that backup file.';
+      showToast(message, 'error');
+    }
+  };
 
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: 'application/json',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `levain-backup-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const runImport = async (mode: ImportMode) => {
+    if (!pendingImport) return;
+    setIsImporting(true);
+    try {
+      const result = await importAllData(pendingImport, mode);
+      showToast(
+        `Imported ${result.starters} starters, ${result.recipes} recipes, ${result.bakes} bakes.`,
+        'success'
+      );
+      setPendingImport(null);
+    } catch (error) {
+      console.error('Import failed:', error);
+      showToast('Import failed. Your existing data was not changed.', 'error');
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const handleDeleteAllData = async () => {
@@ -401,17 +443,67 @@ export function SettingsPage() {
             Data
           </h2>
           <Card padding="none">
+            {/* Include-photos toggle for export */}
+            <button
+              onClick={() => setIncludePhotos((v) => !v)}
+              className="w-full flex items-center gap-4 px-4 py-4 text-left hover:bg-crumb-50 dark:hover:bg-crust-800/50 transition-colors"
+            >
+              <ImageIcon className="w-5 h-5 text-crust-500 dark:text-crumb-500" />
+              <div className="flex-1">
+                <p className="font-medium text-crust-800 dark:text-crumb-100">
+                  Include photos in backup
+                </p>
+                <p className="text-sm text-crust-500 dark:text-crumb-500">
+                  {includePhotos
+                    ? 'Portable across devices — larger file'
+                    : 'Smaller file — photos won’t transfer to a new device'}
+                </p>
+              </div>
+              <span
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+                  includePhotos ? 'bg-honey-500' : 'bg-crumb-300 dark:bg-crust-700'
+                }`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                    includePhotos ? 'translate-x-5' : 'translate-x-0.5'
+                  }`}
+                />
+              </span>
+            </button>
+
+            <div className="border-t border-crumb-100 dark:border-crust-800" />
+
             <button
               onClick={handleExportData}
-              className="w-full flex items-center gap-4 px-4 py-4 text-left hover:bg-crumb-50 dark:hover:bg-crust-800/50 transition-colors"
+              disabled={isExporting}
+              className="w-full flex items-center gap-4 px-4 py-4 text-left hover:bg-crumb-50 dark:hover:bg-crust-800/50 transition-colors disabled:opacity-60"
             >
               <Download className="w-5 h-5 text-crust-500 dark:text-crumb-500" />
               <div className="flex-1">
                 <p className="font-medium text-crust-800 dark:text-crumb-100">
-                  Export Data
+                  {isExporting ? 'Preparing backup…' : 'Back up / export'}
                 </p>
                 <p className="text-sm text-crust-500 dark:text-crumb-500">
-                  Download all your data as JSON
+                  Save all your data to a file you can keep
+                </p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-crumb-400 dark:text-crust-600" />
+            </button>
+
+            <div className="border-t border-crumb-100 dark:border-crust-800" />
+
+            <button
+              onClick={handlePickImport}
+              className="w-full flex items-center gap-4 px-4 py-4 text-left hover:bg-crumb-50 dark:hover:bg-crust-800/50 transition-colors"
+            >
+              <Upload className="w-5 h-5 text-crust-500 dark:text-crumb-500" />
+              <div className="flex-1">
+                <p className="font-medium text-crust-800 dark:text-crumb-100">
+                  Restore / import
+                </p>
+                <p className="text-sm text-crust-500 dark:text-crumb-500">
+                  Load data from a backup file
                 </p>
               </div>
               <ChevronRight className="w-5 h-5 text-crumb-400 dark:text-crust-600" />
@@ -480,6 +572,57 @@ export function SettingsPage() {
         confirmText="Delete"
         variant="danger"
       />
+
+      {/* Import merge/replace chooser */}
+      {pendingImport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white dark:bg-crust-900 rounded-2xl p-6 max-w-sm w-full shadow-xl"
+          >
+            <h3 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-1">
+              Restore from backup
+            </h3>
+            <p className="text-sm text-crust-600 dark:text-crumb-400 mb-1">
+              Backup from{' '}
+              {new Date(pendingImport.exportDate).toLocaleDateString()} ·{' '}
+              {pendingImport.data.starters.length} starters,{' '}
+              {pendingImport.data.recipes.length} recipes,{' '}
+              {pendingImport.data.bakes.length} bakes.
+            </p>
+            <p className="text-xs text-crust-500 dark:text-crumb-500 mb-5">
+              Choose how to apply it to your current data.
+            </p>
+            <div className="space-y-2">
+              <Button
+                fullWidth
+                onClick={() => runImport('merge')}
+                disabled={isImporting}
+              >
+                Merge (keep both, update matches)
+              </Button>
+              <Button
+                fullWidth
+                variant="secondary"
+                onClick={() => runImport('replace')}
+                disabled={isImporting}
+                className="text-error-600 dark:text-error-400"
+              >
+                Replace everything
+              </Button>
+              <Button
+                fullWidth
+                variant="ghost"
+                onClick={() => setPendingImport(null)}
+                disabled={isImporting}
+              >
+                Cancel
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

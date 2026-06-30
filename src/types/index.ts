@@ -515,8 +515,6 @@ export interface UserSettings {
   hapticFeedbackEnabled: boolean;
   darkMode: 'system' | 'light' | 'dark';
   claudeApiKey?: string;
-  syncEnabled: boolean;
-  syncUrl?: string;
   // Feeding reminder settings
   feedingRemindersEnabled: boolean;
   feedingReminderHours: number; // Hours after feeding to remind
@@ -534,7 +532,6 @@ export const DEFAULT_SETTINGS: UserSettings = {
   notificationsEnabled: true,
   hapticFeedbackEnabled: true,
   darkMode: 'system',
-  syncEnabled: false,
   feedingRemindersEnabled: true,
   feedingReminderHours: 12, // Default: remind 12 hours after feeding
 };

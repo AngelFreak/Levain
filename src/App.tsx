@@ -223,7 +223,7 @@ function App() {
             exit={{ height: 0, opacity: 0 }}
             className="flex-shrink-0 bg-warning-500 text-white text-center text-sm py-2 px-4 overflow-hidden"
           >
-            You're offline. Changes will sync when connected.
+            You're offline. Your data is saved on this device.
           </motion.div>
         )}
       </AnimatePresence>

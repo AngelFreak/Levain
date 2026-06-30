@@ -155,7 +155,17 @@ photos display after import on a fresh install; merge of overlapping file → no
 dup uuids/slugs; replace failure mid-way → original data preserved; old/corrupt
 file → rejected with toast.
 
-**Status:** Not Started
+**Status:** Complete — `src/lib/backup.ts` exports all Dexie tables + Dexie
+internal counters + localStorage user settings; photos embedded as data: URIs
+(opt-out toggle), remote URLs kept as-is, rehydrated to device files on native
+import. Replace = single Dexie transaction (atomic), settings applied only after
+DB success, active timelines restored paused; merge upserts by uuid (+slug for
+recipes). `parseBackup` validates app/version/shape and revives Dates. Native
+share via Filesystem+Share, web `<a>` fallback; file-picker import. Offline
+banner corrected; dead `syncEnabled`/`syncUrl` settings removed. Verified in
+browser: round-trip counts match exactly; merge idempotent (no dups); dates
+revived; validation rejects bad/old/non-Levain files; photos (data: + remote)
+survive; timelines come back paused. tsc+build clean, zero new lint errors.
 
 ---
 
