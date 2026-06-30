@@ -398,10 +398,7 @@ export function BookPage() {
                 variant="default"
                 padding="none"
                 pressable
-                onPress={() => {
-                  // TODO: Navigate to bake detail
-                  console.log('View bake:', bake.id);
-                }}
+                onPress={() => navigateTo('bake-detail', { bakeId: bake.uuid })}
               >
                 <div className="flex">
                   {/* Photo */}

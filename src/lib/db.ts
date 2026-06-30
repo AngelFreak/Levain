@@ -190,24 +190,28 @@ export async function createBakeFromTimeline(
       flourBreakdown: recipe?.flourBreakdown || [],
       additions: recipe?.additions || [],
     },
+    // Process & baking aren't captured during a timeline bake, so we don't
+    // fabricate specifics — fields are zeroed and flagged unknown for the UI.
     process: {
-      bulkTime: 4,
-      bulkTemp: 24,
-      folds: 4,
+      bulkTime: 0,
+      bulkTemp: 0,
+      folds: 0,
       foldMethod: 'stretch_fold',
       proofMethod: 'room_temp',
-      proofTime: 2,
-      proofTemp: 24,
+      proofTime: 0,
+      proofTemp: 0,
       shapeType: 'boule',
     },
     baking: {
-      ovenTemp: 245,
-      steamMethod: 'Dutch oven',
-      coveredTime: 20,
-      uncoveredTime: 25,
+      ovenTemp: 0,
+      steamMethod: '',
+      coveredTime: 0,
+      uncoveredTime: 0,
     },
+    processKnown: false,
+    bakingKnown: false,
     environment: {
-      ambientTemp: 22,
+      ambientTemp: 0,
     },
     results: {
       overall: overallRating,

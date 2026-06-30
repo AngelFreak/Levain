@@ -3,6 +3,7 @@ export { CalculatorPage } from './Calculator';
 export { StartersPage } from './Starters';
 export { StarterDetailPage } from './StarterDetail';
 export { RecipeDetailPage } from './RecipeDetail';
+export { BakeDetailPage } from './BakeDetail';
 export { ActiveBakePage } from './ActiveBakePage';
 export { RecipesPage } from './Recipes';
 export { BookPage } from './Book';

@@ -230,7 +230,18 @@ fabricated 245°C/4h defaults.
 **Tests:** full bake persists/reopens/edits; recipe-linked bake prefills
 ingredients; journal stats include all bakes.
 
-**Status:** Not Started
+**Status:** Complete — new `BakeDetailPage` (claims the unused `'bake-detail'`
+route) renders the full record: ingredients, per-dimension result ratings,
+process, baking, notes, tags, photo gallery. Journal cards navigate to it
+(replacing the console.log). `createBakeFromTimeline` no longer fabricates
+process/oven values — it zeroes them and sets `processKnown`/`bakingKnown` false,
+and the detail shows "Not recorded" instead. New `EditBakeModal` captures
+everything (date, recipe link with ingredient prefill, starter link, ingredients,
+all ratings, photos via photos.ts, tags, process/baking) and flips the known
+flags when filled; StartBakeModal sets the flags honestly. Verified in browser:
+timeline bake shows "Not recorded" (no fabricated 245°C); edit adds tag +
+process and the detail live-updates; round-trip persists. tsc+build clean, zero
+new lint errors.
 
 ---
 

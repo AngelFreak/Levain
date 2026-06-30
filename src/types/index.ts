@@ -233,6 +233,14 @@ export interface Bake {
   notes: string;
   tags: string[];
   isFavorite: boolean;
+  /**
+   * Whether the user actually recorded process / baking details. Bakes created
+   * from a completed timeline don't have these, so the detail view shows
+   * "not recorded" rather than fabricated numbers. Defaults to true for
+   * hand-logged bakes that filled the fields. Optional for back-compat.
+   */
+  processKnown?: boolean;
+  bakingKnown?: boolean;
   createdAt: Date;
   updatedAt: Date;
   syncedAt?: Date;

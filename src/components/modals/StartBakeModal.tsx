@@ -76,11 +76,15 @@ export function StartBakeModal({ isOpen, onClose }: StartBakeModalProps) {
           shapeType: 'boule',
         },
         baking: {
-          ovenTemp: 245,
-          steamMethod: 'dutch oven',
-          coveredTime: 20,
-          uncoveredTime: 25,
+          ovenTemp: 0,
+          steamMethod: '',
+          coveredTime: 0,
+          uncoveredTime: 0,
         },
+        // The quick logger captures bulk metrics (when expanded) but no oven
+        // details, so flag process known only if the user filled them in.
+        processKnown: showMetrics,
+        bakingKnown: false,
         environment: {
           ambientTemp: bulkTemp,
         },
