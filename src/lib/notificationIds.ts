@@ -75,3 +75,25 @@ export async function allocateTimelineBaseId(): Promise<number> {
   await setSetting(TIMELINE_NEXT_KEY, base + TIMELINE_BLOCK_SIZE);
   return base;
 }
+
+// ---- Planned-feed reminders: one persisted ID per starter UUID ----
+// Distinct from the recurring feeding reminder (a planned feed is a one-off at a
+// computed time), so it gets its own ID range and per-starter mapping.
+const PLANNED_FEED_MIN = 2_000_000;
+const PLANNED_FEED_MAX = 2_099_999;
+const PLANNED_FEED_MAP_KEY = 'notif.plannedFeedIds';
+const PLANNED_FEED_NEXT_KEY = 'notif.plannedFeedNext';
+
+/** Stable notification ID for a starter's planned-feed reminder. */
+export async function getPlannedFeedId(starterUuid: string): Promise<number> {
+  const map = await getSetting<Record<string, number>>(PLANNED_FEED_MAP_KEY, {});
+  const existing = map[starterUuid];
+  if (existing !== undefined) return existing;
+
+  const next = await getSetting<number>(PLANNED_FEED_NEXT_KEY, PLANNED_FEED_MIN);
+  const id = Math.min(next, PLANNED_FEED_MAX);
+  map[starterUuid] = id;
+  await setSetting(PLANNED_FEED_MAP_KEY, map);
+  await setSetting(PLANNED_FEED_NEXT_KEY, id + 1);
+  return id;
+}

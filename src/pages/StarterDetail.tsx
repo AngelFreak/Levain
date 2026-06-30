@@ -27,6 +27,7 @@ import { EditStarterModal } from '../components/modals';
 import { useAppStore } from '../stores/appStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { LineChart, Line, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { PlanFeedModal } from '../components/modals/PlanFeedModal';
 import { db, recomputeStarterStats, resetStarterDiscard } from '../lib/db';
 import { computeNormalizedPeakSeries } from '../lib/starterStats';
 import { formatTime } from '../lib/fermentation';
@@ -61,6 +62,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPhotoSheet, setShowPhotoSheet] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showPlanFeed, setShowPlanFeed] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   useEffect(() => {
@@ -467,6 +469,16 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
               Mark peak now
             </Button>
           )}
+          {/* Plan a feed — recommend when/what ratio to feed for a target peak */}
+          <Button
+            variant="ghost"
+            fullWidth
+            onClick={() => setShowPlanFeed(true)}
+            className="mt-2"
+          >
+            <Calendar className="w-4 h-4" />
+            Plan a feed
+          </Button>
         </Card>
       </motion.div>
 
@@ -834,6 +846,12 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
         onClose={() => setShowEditModal(false)}
         starter={starter}
         onSave={(updatedStarter) => setStarter(updatedStarter)}
+      />
+
+      <PlanFeedModal
+        isOpen={showPlanFeed}
+        onClose={() => setShowPlanFeed(false)}
+        starter={starter}
       />
 
       {/* Help: how starter analysis works */}

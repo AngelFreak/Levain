@@ -8,6 +8,7 @@ import {
   FEEDING_REMINDER_MIN,
   FEEDING_REMINDER_MAX,
   getFeedingReminderId,
+  getPlannedFeedId,
 } from './notificationIds';
 
 // Initialize notification channels for Android
@@ -353,6 +354,59 @@ export async function cancelFeedingReminder(starter: Starter): Promise<void> {
   } catch (error) {
     console.error('Failed to cancel feeding reminder:', error);
   }
+}
+
+/**
+ * Schedule a one-off "feed now to peak by your target" reminder for a planned
+ * feed (Stage 8). Distinct from the recurring feeding reminder. Replaces any
+ * prior planned-feed reminder for this starter. No-ops (cancels) if the feed
+ * time is in the past.
+ *
+ * @param starter The starter being planned.
+ * @param feedAt  When to feed.
+ * @param ratio   Recommended ratio, included in the body.
+ * @param targetPeak When it should peak (for the body copy).
+ */
+export async function schedulePlannedFeedReminder(
+  starter: Starter,
+  feedAt: Date,
+  ratio: string,
+  targetPeak: Date
+): Promise<{ success: boolean; permissionDenied: boolean }> {
+  const id = await getPlannedFeedId(starter.uuid);
+
+  // Always clear a previous planned-feed reminder first.
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await LocalNotifications.cancel({ notifications: [{ id }] });
+    } catch {
+      // ignore — nothing scheduled
+    }
+  }
+
+  if (feedAt.getTime() <= Date.now()) {
+    return { success: false, permissionDenied: false };
+  }
+
+  const permissions = await checkPermissions();
+  if (!permissions.notifications) {
+    const granted = await requestNotificationPermission();
+    if (!granted) return { success: false, permissionDenied: true };
+  }
+
+  const peakLabel = targetPeak.toLocaleString(undefined, {
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  await scheduleNotification(
+    id,
+    `🥣 Feed ${starter.name} now (${ratio})`,
+    `Feed at ${ratio} so it peaks around ${peakLabel}.`,
+    feedAt,
+    'feeding_reminder'
+  );
+  return { success: true, permissionDenied: false };
 }
 
 /**

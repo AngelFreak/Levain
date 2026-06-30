@@ -31,7 +31,7 @@ const BASE_BULK_TIMES: Record<number, number> = {
  * Starter feeding ratios and their approximate peak times at 24°C
  * Format: ratio string -> hours to peak
  */
-const STARTER_PEAK_TIMES: Record<string, number> = {
+export const STARTER_PEAK_TIMES: Record<string, number> = {
   '1:0.5:0.5': 2, // Very quick refresh
   '1:1:1': 3, // Quick feed - adjusted down from 4
   '1:2:2': 4, // Standard feed - adjusted down from 6

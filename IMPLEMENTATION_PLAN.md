@@ -388,7 +388,17 @@ history + kitchen temp; can set a reminder.
 **Tests:** warmer → earlier/shorter; fast measured peak → looser ratio; reminder
 schedules correctly.
 
-**Status:** Not Started
+**Status:** Complete — `src/lib/starterPlanner.ts` `planStarterFeed(targetPeak,
+ambientTemp, avgPeakHours?)` picks the gentlest fitting ratio from the exported
+STARTER_PEAK_TIMES table, temp-adjusted via getTemperatureMultiplier and
+personalized by the starter's measured averagePeakTime; returns ratio, feed time,
+and a status (ok/feed_now/too_soon/past). New PlanFeedModal on StarterDetail
+("Plan a feed") shows the recommendation and sets an optional one-off reminder at
+the feed time via `schedulePlannedFeedReminder` (own ID range 2_000_000+ in
+notificationIds, distinct from the recurring reminder, so no double-notify).
+Verified in browser: 10h/23°C→1:5:5; 31°C→4h peak (feed later); 15°C→1:2:2;
+measured 12h→1:3:3 personalized; 2h→feed_now; past→past. Modal renders the plan.
+tsc+build clean, zero new lint errors.
 
 ---
 
