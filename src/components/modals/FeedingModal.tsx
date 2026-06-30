@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Droplet, Thermometer, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button, NumberInput, BottomSheet, Textarea } from '../ui';
-import { db } from '../../lib/db';
+import { db, recomputeStarterStats } from '../../lib/db';
 import { useAppStore } from '../../stores/appStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -109,6 +109,9 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
           lastFed: new Date(),
         });
       }
+
+      // Recompute feeding-derived stats (avg peak, activity) for this starter.
+      await recomputeStarterStats(selectedStarterId);
 
       const starterName = starters?.find((s) => s.uuid === selectedStarterId)?.name || 'Starter';
 

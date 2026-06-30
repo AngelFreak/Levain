@@ -194,7 +194,16 @@ divergence between the two writers.
 **Tests:** known set → expected average; 0–2 feedings → graceful empty; temp
 normalization moves the number correctly; re-open page → value stable.
 
-**Status:** Not Started
+**Status:** Complete — `src/lib/starterStats.ts` computes temp-normalized
+averagePeakTime, median feeding interval, and a behavioral activityScore (kept
+separate from the photo healthScore so the two writers don't clobber).
+`recomputeStarterStats` in db.ts is the single write path (called on feeding log
+and StarterDetail load to self-heal). StarterDetail shows real tiles (Health /
+Avg Peak / Activity), a cadence caption, a "Mark peak now" capture action (the
+feeding form has no peak input), and a recharts "Time to peak" sparkline at ≥3
+peaks. Verified in browser: ref-temp avg 6h; 31°C→12h and 15°C→3h normalization;
+0–2 feedings graceful; mark-peak adds a sample and updates the average. tsc+build
+clean, zero new lint errors. (Benign recharts first-paint width(-1) dev warning.)
 
 ---
 

@@ -23,11 +23,36 @@ export interface Starter {
   notes: string;
   photoUri?: string;
   lastFed?: Date;
+  /** 0–100 from the most recent PHOTO analysis (Claude/on-device). Not feeding-derived. */
   healthScore?: number;
+  /**
+   * Mean hours from feeding to peak, temperature-normalized to the reference
+   * temp, computed from logged feedings. Undefined until enough peak data.
+   * See src/lib/starterStats.ts (the single writer).
+   */
   averagePeakTime?: number;
+  /** Cached behavioral stats derived from feedings. See computeStarterStats(). */
+  feedingStats?: StarterFeedingStats;
   /** Most recent Claude photo analysis of this starter (if any). */
   lastAnalysis?: StarterAnalysis;
   syncedAt?: Date;
+}
+
+/** Feeding-derived activity metrics, cached on the starter for quick display. */
+export interface StarterFeedingStats {
+  /** Total feedings logged. */
+  feedingCount: number;
+  /** Feedings that recorded a peak time (basis for averagePeakTime). */
+  peakSampleCount: number;
+  /** Temperature-normalized mean time-to-peak in hours, if known. */
+  averagePeakHours?: number;
+  /** Median days between feedings, if ≥2 feedings. */
+  medianIntervalDays?: number;
+  /**
+   * Behavioral activity score 0–100 from feeding recency + consistency + peak
+   * reliability. Distinct from the photo-analysis healthScore.
+   */
+  activityScore?: number;
 }
 
 export interface Feeding {

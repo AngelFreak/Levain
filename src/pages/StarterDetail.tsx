@@ -25,7 +25,9 @@ import { ConfirmModal } from '../components/ui/Modal';
 import { EditStarterModal } from '../components/modals';
 import { useAppStore } from '../stores/appStore';
 import { useSettingsStore } from '../stores/settingsStore';
-import { db } from '../lib/db';
+import { LineChart, Line, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { db, recomputeStarterStats } from '../lib/db';
+import { computeNormalizedPeakSeries } from '../lib/starterStats';
 import { formatTime } from '../lib/fermentation';
 import { rescheduleFeedingReminder, cancelFeedingReminder } from '../lib/notifications';
 import { releaseFeedingReminderId } from '../lib/notificationIds';
@@ -62,7 +64,11 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
 
   useEffect(() => {
     const loadData = async () => {
-      // Load starter
+      // Self-heal: recompute feeding-derived stats so the tiles reflect the
+      // latest feedings even if they changed elsewhere (single write path).
+      await recomputeStarterStats(starterId);
+
+      // Load starter (after recompute, so averagePeakTime/feedingStats are fresh)
       const starterData = await db.starters.where('uuid').equals(starterId).first();
       if (starterData) {
         setStarter(starterData);
@@ -81,6 +87,39 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
 
     loadData();
   }, [starterId]);
+
+  // Stamp the current time as the peak for the most recent feeding that hasn't
+  // recorded one yet, then recompute stats. This is the capture path that makes
+  // averagePeakTime meaningful (the feeding form has no peak-time input).
+  const handleMarkPeak = async () => {
+    const latestUnpeaked = feedings.find((f) => !f.peakTime);
+    if (!latestUnpeaked?.id) {
+      showToast('No recent feeding to mark — log a feeding first.', 'info');
+      return;
+    }
+    const hours =
+      (Date.now() - new Date(latestUnpeaked.timestamp).getTime()) / (1000 * 60 * 60);
+    if (hours < 0.25) {
+      showToast('That feeding was just logged — mark the peak when it rises.', 'info');
+      return;
+    }
+    try {
+      await db.feedings.update(latestUnpeaked.id, { peakTime: new Date() });
+      await recomputeStarterStats(starterId);
+      // Refresh local state
+      const [starterData, feedingsData] = await Promise.all([
+        db.starters.where('uuid').equals(starterId).first(),
+        db.feedings.where('starterId').equals(starterId).toArray(),
+      ]);
+      if (starterData) setStarter(starterData);
+      feedingsData.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      setFeedings(feedingsData);
+      showToast(`Peak recorded at ~${Math.round(hours)}h.`, 'success');
+    } catch (error) {
+      console.error('Failed to mark peak:', error);
+      showToast('Could not record peak', 'error');
+    }
+  };
 
   const handleDelete = async () => {
     if (!starter?.id) return;
@@ -241,6 +280,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
   }
 
   const feedingStatus = getFeedingStatus(starter.lastFed);
+  const peakHistory = computeNormalizedPeakSeries(feedings);
 
   return (
     <div className="px-4 pt-6 pb-24">
@@ -359,20 +399,33 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-crust-800 dark:text-crumb-100">
-                {starter.averagePeakTime ?? '--'}
+                {starter.averagePeakTime != null ? `${starter.averagePeakTime}h` : '--'}
               </div>
               <div className="text-xs text-crust-500 dark:text-crumb-500">
-                Avg Peak (hrs)
+                Avg Peak
               </div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-crust-800 dark:text-crumb-100">
-                {feedings.length}
+              <div className={`text-2xl font-bold ${getHealthColor(starter.feedingStats?.activityScore)}`}>
+                {starter.feedingStats?.activityScore ?? '--'}
               </div>
               <div className="text-xs text-crust-500 dark:text-crumb-500">
-                Total Feedings
+                Activity
               </div>
             </div>
+          </div>
+
+          {/* Feeding cadence caption */}
+          <div className="mt-2 text-center text-xs text-crust-500 dark:text-crumb-500">
+            {feedings.length} feeding{feedings.length === 1 ? '' : 's'}
+            {starter.feedingStats?.medianIntervalDays != null && (
+              <> · ~{starter.feedingStats.medianIntervalDays}d between feeds</>
+            )}
+            {starter.feedingStats != null &&
+              starter.feedingStats.peakSampleCount === 0 &&
+              feedings.length > 0 && (
+                <> · tap “Mark peak” when it rises to learn its timing</>
+              )}
           </div>
 
           {/* Quick Actions */}
@@ -394,6 +447,18 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
               {isAnalyzing ? 'Analyzing…' : 'Analyze'}
             </Button>
           </div>
+          {/* Mark peak — captures time-to-peak for the latest feeding */}
+          {feedings.some((f) => !f.peakTime) && (
+            <Button
+              variant="ghost"
+              fullWidth
+              onClick={handleMarkPeak}
+              className="mt-2"
+            >
+              <TrendingUp className="w-4 h-4" />
+              Mark peak now
+            </Button>
+          )}
         </Card>
       </motion.div>
 
@@ -443,6 +508,52 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
           </div>
         </Card>
       </motion.div>
+
+      {/* Peak-time history (shown once there are enough recorded peaks) */}
+      {peakHistory.length >= 3 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.13 }}
+          className="mb-6"
+        >
+          <Card padding="md">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-honey-500" />
+                <p className="font-medium text-crust-800 dark:text-crumb-100">
+                  Time to peak
+                </p>
+              </div>
+              <p className="text-xs text-crust-500 dark:text-crumb-500">
+                last {peakHistory.length} peaks
+              </p>
+            </div>
+            <div className="h-24">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={peakHistory} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+                  <YAxis hide domain={['dataMin - 1', 'dataMax + 1']} />
+                  <Tooltip
+                    formatter={(v) => [`${v}h`, 'Peak']}
+                    labelFormatter={() => ''}
+                    contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="hours"
+                    stroke="#d97706"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: '#d97706' }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="text-xs text-center text-crust-500 dark:text-crumb-500 mt-1">
+              Normalized to {settings.defaultAmbientTemp}°C · lower is faster
+            </p>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Birthday */}
       <motion.div

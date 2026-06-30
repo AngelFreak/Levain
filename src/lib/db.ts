@@ -6,7 +6,9 @@ import type {
   Bake,
   ActiveTimeline,
   Settings,
+  StarterFeedingStats,
 } from '../types';
+import { computeStarterStats, statsToStarterUpdate } from './starterStats';
 
 // Levain local database using Dexie (IndexedDB wrapper)
 class LevainDatabase extends Dexie {
@@ -94,6 +96,21 @@ export async function getRecentFeedings(starterId: string, limit = 10): Promise<
   return feedings
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     .slice(0, limit);
+}
+
+/**
+ * Recompute feeding-derived stats for a starter and persist them. The single
+ * write path for averagePeakTime/feedingStats — call after logging or editing a
+ * feeding, or on detail load to self-heal. Returns the computed stats, or null
+ * if the starter isn't found. Does not touch healthScore (photo-analysis owns it).
+ */
+export async function recomputeStarterStats(starterUuid: string): Promise<StarterFeedingStats | null> {
+  const starter = await db.starters.where('uuid').equals(starterUuid).first();
+  if (!starter?.id) return null;
+  const feedings = await db.feedings.where('starterId').equals(starterUuid).toArray();
+  const stats = computeStarterStats(feedings);
+  await db.starters.update(starter.id, statsToStarterUpdate(stats));
+  return stats;
 }
 
 // Recipe operations
