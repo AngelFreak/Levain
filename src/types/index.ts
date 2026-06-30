@@ -33,6 +33,11 @@ export interface Starter {
   averagePeakTime?: number;
   /** Cached behavioral stats derived from feedings. See computeStarterStats(). */
   feedingStats?: StarterFeedingStats;
+  /**
+   * Running total of discard accumulated from feedings (grams), reset when the
+   * user logs that they've used it up. Drives the "use your discard" prompt.
+   */
+  discardGrams?: number;
   /** Most recent Claude photo analysis of this starter (if any). */
   lastAnalysis?: StarterAnalysis;
   syncedAt?: Date;

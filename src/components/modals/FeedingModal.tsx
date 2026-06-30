@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Droplet, Thermometer, ChevronDown, ChevronUp } from 'lucide-react';
+import { Droplet, Thermometer, ChevronDown, ChevronUp, Recycle } from 'lucide-react';
 import { Button, NumberInput, BottomSheet, Textarea } from '../ui';
-import { db, recomputeStarterStats } from '../../lib/db';
+import { db, recomputeStarterStats, addStarterDiscard } from '../../lib/db';
 import { useAppStore } from '../../stores/appStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -45,6 +45,7 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
   const [flourType, setFlourType] = useState('white');
   const [waterTemp, setWaterTemp] = useState<number | undefined>(undefined);
   const [ambientTemp, setAmbientTemp] = useState<number | undefined>(undefined);
+  const [discardGrams, setDiscardGrams] = useState(0);
   const [notes, setNotes] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -77,6 +78,31 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
       setWaterWeight(starterWeight * flourRatio);
     }
   }, [ratio, starterWeight]);
+
+  // Default the discard estimate from the previous feeding: the flour + water
+  // you built last time is roughly what gets discarded when you keep only
+  // `starterWeight` to feed again. The user can override in advanced options.
+  useEffect(() => {
+    if (!selectedStarterId) return;
+    let cancelled = false;
+    db.feedings
+      .where('starterId')
+      .equals(selectedStarterId)
+      .toArray()
+      .then((fs) => {
+        if (cancelled) return;
+        const last = fs.sort(
+          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        )[0];
+        const estimate = last
+          ? Math.round((last.flourWeight ?? 0) + (last.waterWeight ?? 0))
+          : 0;
+        setDiscardGrams(estimate);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedStarterId]);
 
   const handleSubmit = async () => {
     if (!selectedStarterId) {
@@ -112,6 +138,11 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
 
       // Recompute feeding-derived stats (avg peak, activity) for this starter.
       await recomputeStarterStats(selectedStarterId);
+
+      // Accumulate discard for the "use your discard" prompt.
+      if (discardGrams > 0) {
+        await addStarterDiscard(selectedStarterId, discardGrams);
+      }
 
       const starterName = starters?.find((s) => s.uuid === selectedStarterId)?.name || 'Starter';
 
@@ -424,6 +455,27 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
                     unit="°C"
                   />
                 </div>
+              </div>
+
+              {/* Discard (optional) — accumulates toward the use-it-up prompt */}
+              <div>
+                <label className="block text-xs font-medium text-crust-700 dark:text-crumb-200 mb-1">
+                  <div className="flex items-center gap-1">
+                    <Recycle className="w-3 h-3" />
+                    Discard this feeding
+                  </div>
+                </label>
+                <NumberInput
+                  value={discardGrams}
+                  onChange={setDiscardGrams}
+                  min={0}
+                  max={2000}
+                  step={10}
+                  unit="g"
+                />
+                <p className="text-[10px] text-crust-500 dark:text-crumb-500 mt-1">
+                  Estimated from your last feeding. Tracked so you know when to bake something with it.
+                </p>
               </div>
 
               {/* Notes */}

@@ -19,6 +19,7 @@ import {
   FlaskConical,
   Home,
   Snowflake,
+  Recycle,
 } from 'lucide-react';
 import { Card, Button, ActionSheet, Badge, BottomSheet } from '../components/ui';
 import { ConfirmModal } from '../components/ui/Modal';
@@ -26,7 +27,7 @@ import { EditStarterModal } from '../components/modals';
 import { useAppStore } from '../stores/appStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { LineChart, Line, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { db, recomputeStarterStats } from '../lib/db';
+import { db, recomputeStarterStats, resetStarterDiscard } from '../lib/db';
 import { computeNormalizedPeakSeries } from '../lib/starterStats';
 import { formatTime } from '../lib/fermentation';
 import { rescheduleFeedingReminder, cancelFeedingReminder } from '../lib/notifications';
@@ -50,7 +51,7 @@ interface StarterDetailPageProps {
 }
 
 export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
-  const { goBackFromPage, openModal, showToast } = useAppStore();
+  const { goBackFromPage, openModal, showToast, openBookAtCategory } = useAppStore();
   const { settings } = useSettingsStore();
   const hasClaudeKey = Boolean(settings.claudeApiKey?.trim());
   const [starter, setStarter] = useState<Starter | null>(null);
@@ -178,6 +179,13 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
       console.error('Failed to change storage location:', error);
       showToast('Failed to update storage location', 'error');
     }
+  };
+
+  const handleUsedDiscard = async () => {
+    if (!starter) return;
+    await resetStarterDiscard(starter.uuid);
+    setStarter({ ...starter, discardGrams: 0 });
+    showToast('Discard cleared. Nice — nothing wasted!', 'success');
   };
 
   const handleAnalyze = async (source: 'camera' | 'gallery', method: 'local' | 'claude') => {
@@ -508,6 +516,62 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
           </div>
         </Card>
       </motion.div>
+
+      {/* Discard tracker */}
+      {(starter.discardGrams ?? 0) > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.13 }}
+          className="mb-6"
+        >
+          <Card
+            padding="md"
+            className={
+              (starter.discardGrams ?? 0) >= 100
+                ? 'bg-honey-50 dark:bg-honey-950/20 border-honey-200 dark:border-honey-800'
+                : ''
+            }
+          >
+            <div className="flex items-center gap-3">
+              <Recycle className="w-5 h-5 text-honey-600 dark:text-honey-400 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="font-medium text-crust-800 dark:text-crumb-100">
+                  ~{starter.discardGrams} g discard saved up
+                </p>
+                <p className="text-xs text-crust-500 dark:text-crumb-500 mt-0.5">
+                  {(starter.discardGrams ?? 0) >= 100
+                    ? 'Enough to bake something — turn it into crackers, pancakes, or a loaf.'
+                    : 'Accumulating from your feedings.'}
+                </p>
+              </div>
+            </div>
+            {(starter.discardGrams ?? 0) >= 100 && (
+              <div className="flex gap-2 mt-3">
+                <Button
+                  fullWidth
+                  size="sm"
+                  onClick={() => openBookAtCategory('discard')}
+                >
+                  <Recycle className="w-4 h-4" />
+                  Discard recipes
+                </Button>
+                <Button variant="ghost" size="sm" fullWidth onClick={handleUsedDiscard}>
+                  Used it
+                </Button>
+              </div>
+            )}
+            {(starter.discardGrams ?? 0) < 100 && (
+              <button
+                onClick={handleUsedDiscard}
+                className="text-xs text-crust-500 dark:text-crumb-500 mt-2 underline"
+              >
+                Mark used
+              </button>
+            )}
+          </Card>
+        </motion.div>
+      )}
 
       {/* Peak-time history (shown once there are enough recorded peaks) */}
       {peakHistory.length >= 3 && (

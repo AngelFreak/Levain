@@ -113,6 +113,23 @@ export async function recomputeStarterStats(starterUuid: string): Promise<Starte
   return stats;
 }
 
+/** Add discard grams to a starter's running total. */
+export async function addStarterDiscard(starterUuid: string, grams: number): Promise<void> {
+  if (!(grams > 0)) return;
+  const starter = await db.starters.where('uuid').equals(starterUuid).first();
+  if (!starter?.id) return;
+  await db.starters.update(starter.id, {
+    discardGrams: Math.round((starter.discardGrams ?? 0) + grams),
+  });
+}
+
+/** Reset a starter's discard total (e.g. after the user uses it up). */
+export async function resetStarterDiscard(starterUuid: string): Promise<void> {
+  const starter = await db.starters.where('uuid').equals(starterUuid).first();
+  if (!starter?.id) return;
+  await db.starters.update(starter.id, { discardGrams: 0 });
+}
+
 // Recipe operations
 export async function createRecipe(recipe: Omit<Recipe, 'id' | 'uuid' | 'createdAt' | 'updatedAt'>): Promise<number | undefined> {
   const now = new Date();

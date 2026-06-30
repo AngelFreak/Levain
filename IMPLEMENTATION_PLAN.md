@@ -356,7 +356,15 @@ one tap away; total resets when used.
 
 **Tests:** correct grams; prompt navigates to filtered discard recipes; resets.
 
-**Status:** Not Started
+**Status:** Complete — added `discardGrams` to Starter (plain optional field, no
+schema bump) with `addStarterDiscard`/`resetStarterDiscard` helpers. FeedingModal
+has an optional discard input in advanced options, defaulted from the previous
+feeding's flour+water, accumulated on log. StarterDetail shows a discard card
+(running total) and, at ≥100 g, a "Discard recipes" + "Used it" prompt. Deep-link
+via a new one-shot `bookIntent` in appStore (`openBookAtCategory`) that BookPage
+reads as initial state → Recipes tab at the Discard category. Verified in browser:
+60+80 → 140 g; prompt shows at threshold; "Discard recipes" lands on Book →
+Recipes → Discard; reset clears to 0. tsc+build clean, zero new lint errors.
 
 ---
 

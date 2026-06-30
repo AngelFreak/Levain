@@ -24,7 +24,11 @@ const RECIPE_CATEGORIES: { id: RecipeCategory | 'all'; label: string }[] = [
 ];
 
 export function BookPage() {
-  const { openModal, navigateTo } = useAppStore();
+  const { openModal, navigateTo, bookIntent, consumeBookIntent } = useAppStore();
+  // A deep-link intent (e.g. "use your discard") lands us on the Recipes tab at
+  // a specific category. Read it as INITIAL state — switching tabs remounts
+  // BookPage, so this runs fresh each time the intent is set, avoiding a
+  // setState-in-effect cascade.
   const [activeTab, setActiveTab] = useState<BookTab>('recipes');
 
   // Bakes state
@@ -42,7 +46,9 @@ export function BookPage() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [recipesLoading, setRecipesLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<RecipeCategory | 'all'>('all');
+  const [selectedCategory, setSelectedCategory] = useState<RecipeCategory | 'all'>(
+    (bookIntent?.category as RecipeCategory | 'all') ?? 'all'
+  );
 
   // Legacy compatibility
   const isLoading = activeTab === 'journal' ? bakesLoading : recipesLoading;
@@ -117,6 +123,12 @@ export function BookPage() {
   useEffect(() => {
     loadRecipes();
   }, [selectedCategory, searchQuery]);
+
+  // The intent was applied via initial state above; clear it so it doesn't
+  // re-apply. Only touches the store (no local setState cascade).
+  useEffect(() => {
+    if (bookIntent) consumeBookIntent();
+  }, [bookIntent, consumeBookIntent]);
 
   const renderStars = (rating: number) => {
     return (
