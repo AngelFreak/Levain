@@ -49,6 +49,7 @@ export function AddStarterModal({ isOpen, onClose }: AddStarterModalProps) {
         hydration: parseInt(hydration),
         createdDate: fromDateInputValue(createdDate),
         isActive: true,
+        storageLocation: 'room',
         notes: '',
       });
 

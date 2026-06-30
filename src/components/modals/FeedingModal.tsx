@@ -6,6 +6,7 @@ import { useAppStore } from '../../stores/appStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { scheduleFeedingReminder } from '../../lib/notifications';
+import { getStorageLocation, getFeedingReminderHours } from '../../lib/storage';
 import type { Feeding } from '../../types';
 
 interface FeedingModalProps {
@@ -120,8 +121,15 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
         );
 
         if (reminderResult.success && reminderResult.scheduledTime) {
-          const hours = settings.feedingReminderHours;
-          showToast(`${starterName} fed! Reminder set for ${hours}h.`, 'success');
+          const effectiveHours = getFeedingReminderHours(
+            starter.storageLocation,
+            settings.feedingReminderHours
+          );
+          const interval =
+            getStorageLocation(starter.storageLocation) === 'fridge'
+              ? `${Math.round(effectiveHours / 24)} days`
+              : `${effectiveHours}h`;
+          showToast(`${starterName} fed! Reminder set for ${interval}.`, 'success');
         } else if (reminderResult.permissionDenied) {
           showToast(`${starterName} fed! Enable notifications for reminders.`, 'warning');
         } else {

@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Edit2 } from 'lucide-react';
+import { Edit2, Home, Snowflake } from 'lucide-react';
 import { Button, Input, BottomSheet, Textarea, DateField, toDateInputValue, fromDateInputValue } from '../ui';
 import { db } from '../../lib/db';
 import { useAppStore } from '../../stores/appStore';
-import type { Starter } from '../../types';
+import { useSettingsStore } from '../../stores/settingsStore';
+import { rescheduleFeedingReminder } from '../../lib/notifications';
+import { getStorageLocation, STORAGE_LOCATION_META } from '../../lib/storage';
+import type { Starter, StorageLocation } from '../../types';
 
 interface EditStarterModalProps {
   isOpen: boolean;
@@ -14,11 +17,13 @@ interface EditStarterModalProps {
 
 export function EditStarterModal({ isOpen, onClose, starter, onSave }: EditStarterModalProps) {
   const { showToast } = useAppStore();
+  const { settings } = useSettingsStore();
   const [name, setName] = useState('');
   const [flourType, setFlourType] = useState('white');
   const [hydration, setHydration] = useState('100');
   const [notes, setNotes] = useState('');
   const [isActive, setIsActive] = useState(true);
+  const [storageLocation, setStorageLocation] = useState<StorageLocation>('room');
   const [createdDate, setCreatedDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -47,6 +52,7 @@ export function EditStarterModal({ isOpen, onClose, starter, onSave }: EditStart
       setHydration(starter.hydration.toString());
       setNotes(starter.notes || '');
       setIsActive(starter.isActive);
+      setStorageLocation(getStorageLocation(starter.storageLocation));
       setCreatedDate(toDateInputValue(new Date(starter.createdDate)));
     }
   }, [starter]);
@@ -61,18 +67,32 @@ export function EditStarterModal({ isOpen, onClose, starter, onSave }: EditStart
 
     setIsSubmitting(true);
     try {
+      const locationChanged = getStorageLocation(starter.storageLocation) !== storageLocation;
+
       const updatedData = {
         name: name.trim(),
         flourType,
         hydration: parseInt(hydration),
         notes,
         isActive,
+        storageLocation,
         createdDate: fromDateInputValue(createdDate),
       };
 
       await db.starters.update(starter.id, updatedData);
 
       const updatedStarter = { ...starter, ...updatedData };
+
+      // A room/fridge change shifts the feeding cadence — reschedule the pending
+      // reminder relative to the last feeding using the new interval.
+      if (locationChanged && settings.notificationsEnabled) {
+        await rescheduleFeedingReminder(
+          updatedStarter,
+          settings.feedingRemindersEnabled,
+          settings.feedingReminderHours
+        );
+      }
+
       showToast(`${name} has been updated!`, 'success');
       onSave?.(updatedStarter);
       onClose();
@@ -92,6 +112,7 @@ export function EditStarterModal({ isOpen, onClose, starter, onSave }: EditStart
       setHydration(starter.hydration.toString());
       setNotes(starter.notes || '');
       setIsActive(starter.isActive);
+      setStorageLocation(getStorageLocation(starter.storageLocation));
       setCreatedDate(toDateInputValue(new Date(starter.createdDate)));
     }
     onClose();
@@ -222,6 +243,57 @@ export function EditStarterModal({ isOpen, onClose, starter, onSave }: EditStart
           </div>
         </div>
 
+        {/* Storage Location - affects feeding reminder cadence */}
+        <div>
+          <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">
+            Storage
+          </label>
+          <div className="bg-surface1 dark:bg-surfaceDark1 rounded-xl border border-crumb-300/50 dark:border-crust-600/50 overflow-hidden">
+            {(['room', 'fridge'] as StorageLocation[]).map((loc, index) => (
+              <button
+                key={loc}
+                type="button"
+                onClick={() => setStorageLocation(loc)}
+                className={`
+                  w-full flex items-center justify-between px-4 py-3.5 text-left
+                  ${index !== 0 ? 'border-t border-crumb-200/50 dark:border-crust-700/50' : ''}
+                  ${storageLocation === loc
+                    ? 'bg-honey-50 dark:bg-honey-900/20'
+                    : 'active:bg-crumb-100 dark:active:bg-surfaceDark2'
+                  }
+                `}
+              >
+                <div className="flex items-center gap-3">
+                  {loc === 'fridge' ? (
+                    <Snowflake className={`w-5 h-5 ${storageLocation === loc ? 'text-honey-600 dark:text-honey-400' : 'text-crust-500 dark:text-crumb-400'}`} />
+                  ) : (
+                    <Home className={`w-5 h-5 ${storageLocation === loc ? 'text-honey-600 dark:text-honey-400' : 'text-crust-500 dark:text-crumb-400'}`} />
+                  )}
+                  <div>
+                    <span className={`font-medium ${
+                      storageLocation === loc
+                        ? 'text-honey-700 dark:text-honey-400'
+                        : 'text-crust-700 dark:text-crumb-200'
+                    }`}>
+                      {STORAGE_LOCATION_META[loc].label}
+                    </span>
+                    <p className="text-xs text-crust-500 dark:text-crumb-500 mt-0.5">
+                      {STORAGE_LOCATION_META[loc].description}
+                    </p>
+                  </div>
+                </div>
+                {storageLocation === loc && (
+                  <div className="w-5 h-5 rounded-full bg-honey-500 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Notes */}
         <Textarea
           label="Notes"
@@ -289,7 +361,7 @@ export function EditStarterModal({ isOpen, onClose, starter, onSave }: EditStart
                   Inactive
                 </span>
                 <p className="text-xs text-crust-500 dark:text-crumb-500 mt-0.5">
-                  Hidden from feeding list (e.g., in fridge)
+                  Hidden from feeding list (archived)
                 </p>
               </div>
               {!isActive && (

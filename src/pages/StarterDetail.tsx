@@ -17,6 +17,8 @@ import {
   KeyRound,
   Cpu,
   FlaskConical,
+  Home,
+  Snowflake,
 } from 'lucide-react';
 import { Card, Button, ActionSheet, Badge, BottomSheet } from '../components/ui';
 import { ConfirmModal } from '../components/ui/Modal';
@@ -25,6 +27,13 @@ import { useAppStore } from '../stores/appStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { db } from '../lib/db';
 import { formatTime } from '../lib/fermentation';
+import { rescheduleFeedingReminder } from '../lib/notifications';
+import {
+  getStorageLocation,
+  getStorageLocationMeta,
+  FRIDGE_FEEDING_INTERVAL_DAYS,
+} from '../lib/storage';
+import type { StorageLocation } from '../types';
 import { takePhoto, photoToBase64 } from '../lib/photos';
 import { analyzeStarter, MissingApiKeyError } from '../lib/claude';
 import { analyzeStarterLocal } from '../lib/starterVision';
@@ -84,6 +93,47 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
       goBackFromPage();
     } catch (error) {
       showToast('Failed to delete starter', 'error');
+    }
+  };
+
+  const handleChangeLocation = async (location: StorageLocation) => {
+    if (!starter?.id) return;
+    if (getStorageLocation(starter.storageLocation) === location) return;
+
+    try {
+      await db.starters.update(starter.id, { storageLocation: location });
+
+      // Re-read so we reschedule against the freshest lastFed (e.g. if the
+      // starter was fed via the modal since this page mounted).
+      const fresh = (await db.starters.get(starter.id)) ?? starter;
+      const updated = { ...fresh, storageLocation: location };
+      setStarter(updated);
+
+      // Move between room/fridge changes the feeding cadence — reschedule the
+      // pending reminder relative to the last feeding using the new interval.
+      let scheduledTime: Date | undefined;
+      if (settings.notificationsEnabled) {
+        const result = await rescheduleFeedingReminder(
+          updated,
+          settings.feedingRemindersEnabled,
+          settings.feedingReminderHours
+        );
+        scheduledTime = result.scheduledTime;
+      }
+
+      const meta = getStorageLocationMeta(location);
+      if (scheduledTime) {
+        const when =
+          location === 'fridge'
+            ? `next feeding reminder in ~${FRIDGE_FEEDING_INTERVAL_DAYS} days`
+            : `feeding reminder updated`;
+        showToast(`Moved to ${meta.label.toLowerCase()} — ${when}.`, 'success');
+      } else {
+        showToast(`Moved to ${meta.label.toLowerCase()}.`, 'success');
+      }
+    } catch (error) {
+      console.error('Failed to change storage location:', error);
+      showToast('Failed to update storage location', 'error');
     }
   };
 
@@ -257,6 +307,17 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
                     Inactive
                   </span>
                 )}
+                {getStorageLocation(starter.storageLocation) === 'fridge' ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
+                    <Snowflake className="w-3 h-3" />
+                    Fridge
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-honey-100 dark:bg-honey-900/30 text-honey-700 dark:text-honey-400 rounded-full">
+                    <Home className="w-3 h-3" />
+                    Room
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center gap-4 mt-2 text-sm text-crust-600 dark:text-crumb-400">
@@ -328,6 +389,53 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
               <Sparkles className="w-4 h-4" />
               {isAnalyzing ? 'Analyzing…' : 'Analyze'}
             </Button>
+          </div>
+        </Card>
+      </motion.div>
+
+      {/* Storage Location */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.12 }}
+        className="mb-6"
+      >
+        <Card padding="md">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="font-medium text-crust-800 dark:text-crumb-100">Storage</p>
+              <p className="text-xs text-crust-500 dark:text-crumb-500 mt-0.5">
+                {getStorageLocationMeta(starter.storageLocation).description}
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => handleChangeLocation('room')}
+              aria-pressed={getStorageLocation(starter.storageLocation) === 'room'}
+              className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl border text-sm font-medium transition-colors ${
+                getStorageLocation(starter.storageLocation) === 'room'
+                  ? 'bg-honey-50 dark:bg-honey-900/20 border-honey-400 dark:border-honey-600 text-honey-700 dark:text-honey-400'
+                  : 'bg-surface1 dark:bg-surfaceDark1 border-crumb-300/50 dark:border-crust-600/50 text-crust-700 dark:text-crumb-200 active:bg-crumb-100 dark:active:bg-surfaceDark2'
+              }`}
+            >
+              <Home className="w-4 h-4" />
+              Room
+            </button>
+            <button
+              type="button"
+              onClick={() => handleChangeLocation('fridge')}
+              aria-pressed={getStorageLocation(starter.storageLocation) === 'fridge'}
+              className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl border text-sm font-medium transition-colors ${
+                getStorageLocation(starter.storageLocation) === 'fridge'
+                  ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-400 dark:border-blue-600 text-blue-700 dark:text-blue-300'
+                  : 'bg-surface1 dark:bg-surfaceDark1 border-crumb-300/50 dark:border-crust-600/50 text-crust-700 dark:text-crumb-200 active:bg-crumb-100 dark:active:bg-surfaceDark2'
+              }`}
+            >
+              <Snowflake className="w-4 h-4" />
+              Fridge
+            </button>
           </div>
         </Card>
       </motion.div>

@@ -2,6 +2,7 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 import type { ScheduleStep, TimelineStep, ScheduledNotification, Starter } from '../types';
 import { checkPermissions, requestNotificationPermission } from './permissions';
+import { getFeedingReminderHours, getStorageLocation } from './storage';
 
 // Initialize notification channels for Android
 let channelsInitialized = false;
@@ -242,18 +243,27 @@ export async function scheduleTimelineNotifications(
 }
 
 /**
- * Schedule a feeding reminder for a starter
- * @param starter The starter that was just fed
- * @param feedingTime When the feeding occurred
- * @param reminderHours Hours after feeding to send reminder
+ * Schedule a feeding reminder for a starter.
+ *
+ * The interval is chosen from the starter's storage location: a room-temp
+ * starter uses `roomReminderHours` (the user's configured interval), while a
+ * starter in the fridge uses the fixed weekly cadence. This keeps the cadence
+ * correct no matter which screen triggers the (re)schedule.
+ *
+ * @param starter The starter that was just fed (or whose location changed)
+ * @param feedingTime When the last feeding occurred (reminder is relative to this)
+ * @param roomReminderHours Room-temp interval in hours (from user settings)
  */
 export async function scheduleFeedingReminder(
   starter: Starter,
   feedingTime: Date,
-  reminderHours: number
+  roomReminderHours: number
 ): Promise<{ success: boolean; permissionDenied: boolean; scheduledTime?: Date }> {
+  // Resolve the effective interval from the starter's location.
+  const effectiveHours = getFeedingReminderHours(starter.storageLocation, roomReminderHours);
+
   // Calculate reminder time
-  const reminderTime = new Date(feedingTime.getTime() + reminderHours * 60 * 60 * 1000);
+  const reminderTime = new Date(feedingTime.getTime() + effectiveHours * 60 * 60 * 1000);
 
   // Don't schedule if time is in the past
   if (reminderTime.getTime() <= Date.now()) {
@@ -279,17 +289,48 @@ export async function scheduleFeedingReminder(
   // Cancel any existing reminder for this starter first
   await cancelFeedingReminder(starter);
 
+  // Tailor the copy to where the starter is kept.
+  const elapsed =
+    getStorageLocation(starter.storageLocation) === 'fridge'
+      ? `${Math.round(effectiveHours / 24)} days`
+      : `${effectiveHours} hours`;
+
   // Schedule the notification with feeding_reminder category
   await scheduleNotification(
     notificationId,
     `🥣 Time to feed ${starter.name}!`,
-    `It's been ${reminderHours} hours since the last feeding. Your starter is ready for its next meal.`,
+    `It's been ${elapsed} since the last feeding. Your starter is ready for its next meal.`,
     reminderTime,
     'feeding_reminder'
   );
 
   console.log(`Scheduled feeding reminder for ${starter.name} at ${reminderTime.toLocaleString()}`);
   return { success: true, permissionDenied: false, scheduledTime: reminderTime };
+}
+
+/**
+ * Re-evaluate a starter's feeding reminder after something other than a feeding
+ * changed — typically a move between room and fridge. Reschedules relative to the
+ * starter's last feeding using the location-appropriate interval. If the starter
+ * was never fed, or reminders are off, any existing reminder is simply cancelled.
+ *
+ * @param starter The starter whose location/state changed
+ * @param remindersEnabled Whether feeding reminders are enabled in settings
+ * @param roomReminderHours Room-temp interval in hours (from user settings)
+ */
+export async function rescheduleFeedingReminder(
+  starter: Starter,
+  remindersEnabled: boolean,
+  roomReminderHours: number
+): Promise<{ success: boolean; permissionDenied: boolean; scheduledTime?: Date }> {
+  // Without reminders enabled or a feeding to anchor to, there's nothing to
+  // schedule — clear any stale reminder so the cadence doesn't go stale.
+  if (!remindersEnabled || !starter.lastFed) {
+    await cancelFeedingReminder(starter);
+    return { success: false, permissionDenied: false };
+  }
+
+  return scheduleFeedingReminder(starter, new Date(starter.lastFed), roomReminderHours);
 }
 
 /**

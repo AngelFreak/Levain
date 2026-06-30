@@ -1,8 +1,9 @@
 import { motion } from 'framer-motion';
-import { Plus, Beaker, Clock, Droplets, ChevronRight } from 'lucide-react';
+import { Plus, Beaker, Clock, Droplets, ChevronRight, Home, Snowflake } from 'lucide-react';
 import { Card, Button } from '../components/ui';
 import { useAppStore } from '../stores/appStore';
 import { db } from '../lib/db';
+import { getStorageLocation } from '../lib/storage';
 import { formatDistanceToNow } from 'date-fns';
 import { useLiveQuery } from 'dexie-react-hooks';
 
@@ -113,6 +114,17 @@ export function StartersPage() {
                           {!starter.isActive && (
                             <span className="px-2 py-0.5 text-xs bg-crumb-200 dark:bg-crust-700 text-crust-600 dark:text-crumb-400 rounded-full">
                               Inactive
+                            </span>
+                          )}
+                          {getStorageLocation(starter.storageLocation) === 'fridge' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full flex-shrink-0">
+                              <Snowflake className="w-3 h-3" />
+                              Fridge
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-honey-100 dark:bg-honey-900/30 text-honey-700 dark:text-honey-400 rounded-full flex-shrink-0">
+                              <Home className="w-3 h-3" />
+                              Room
                             </span>
                           )}
                         </div>
