@@ -4,6 +4,12 @@
 // Starter Types
 // ============================================================================
 
+/**
+ * Where the starter is currently kept. Drives how soon it needs feeding:
+ * room temperature ferments fast (hours), the fridge slows it to ~weekly.
+ */
+export type StorageLocation = 'room' | 'fridge';
+
 export interface Starter {
   id?: number;
   uuid: string;
@@ -12,6 +18,8 @@ export interface Starter {
   hydration: number;
   createdDate: Date;
   isActive: boolean;
+  /** Current storage. Defaults to 'room' for starters created before this field. */
+  storageLocation?: StorageLocation;
   notes: string;
   photoUri?: string;
   lastFed?: Date;
@@ -80,6 +88,52 @@ export interface Recipe {
   createdAt: Date;
   updatedAt: Date;
   syncedAt?: Date;
+
+  // ---- Optional extended fields (e.g. yeast-leavened pizza doughs) ----
+  // All optional so existing sourdough recipes remain valid unchanged.
+  /** Stable identifier used for idempotent seeding (upsert key). */
+  slug?: string;
+  /** Free-form style label, e.g. "Neapolitan". */
+  style?: string;
+  /** Target finished dough weight in grams. */
+  totalDoughWeight?: number;
+  /** Yield expressed as dough balls (for pizza/portioned doughs). */
+  yield?: RecipeYield;
+  /**
+   * Baker's percentages relative to flour weight (always 100). The
+   * baseline for scaling: scale by flour weight to keep these ratios.
+   */
+  bakersPercent?: RecipeBakersPercent;
+  /** Explicit weighed ingredient list with units and baker's %. */
+  ingredients?: RecipeIngredient[];
+}
+
+export interface RecipeYield {
+  /** Number of dough balls. */
+  balls: number;
+  /** Weight per ball in grams. */
+  ballWeightG: number;
+  /** Target stretched pizza diameter in centimetres. */
+  pizzaDiameterCm: number;
+}
+
+export interface RecipeBakersPercent {
+  /** Always 100 — the flour baseline. */
+  flour: number;
+  water: number;
+  salt: number;
+  /** Fresh yeast as a percentage of flour weight. */
+  yeastFresh: number;
+}
+
+export interface RecipeIngredient {
+  name: string;
+  /** Amount in the given unit (metric). */
+  amount: number;
+  /** Metric unit, e.g. "g" or "ml". */
+  unit: string;
+  /** This ingredient's weight as a percentage of flour weight. */
+  bakersPercent: number;
 }
 
 export type RecipeCategory =
@@ -114,6 +168,17 @@ export interface MethodStep {
   duration: number;
   waitTime: number;
   tips?: string;
+  /** Spiral-mixer setting for this step (e.g. Ooni Halo Pro). */
+  mixer?: MixerSetting;
+  /** Countdown timer for this step, in seconds. */
+  timerSeconds?: number;
+}
+
+export interface MixerSetting {
+  /** Mixer power level as a percentage. */
+  percent: number;
+  /** Working speed in revolutions per minute. */
+  rpm: number;
 }
 
 export interface RecipeTiming {

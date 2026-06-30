@@ -13,6 +13,9 @@ import {
   Pencil,
   Trash2,
   Play,
+  Gauge,
+  Timer,
+  Pizza,
 } from 'lucide-react';
 import { Card, Button } from '../components/ui';
 import { EditRecipeModal } from '../components/modals/EditRecipeModal';
@@ -22,6 +25,19 @@ import type { Recipe } from '../types';
 
 interface RecipeDetailPageProps {
   recipeId: string;
+}
+
+/** Format a step timer (seconds) into a compact human label, metric/24h-friendly. */
+function formatTimer(seconds: number): string {
+  // Keep sub-minute and ragged short timers in seconds so values like a
+  // 90 s pizza bake are preserved exactly rather than rounded to minutes.
+  if (seconds < 120 && seconds % 60 !== 0) return `${seconds} s`;
+  if (seconds < 60) return `${seconds} s`;
+  const totalMinutes = Math.round(seconds / 60);
+  if (totalMinutes < 60) return `${totalMinutes} min`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes > 0 ? `${hours} h ${minutes} min` : `${hours} h`;
 }
 
 export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
@@ -262,6 +278,71 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
           </Card>
         </motion.div>
 
+        {/* Yield (portioned doughs, e.g. pizza) */}
+        {recipe.yield && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.12 }}
+          >
+            <Card padding="md">
+              <div className="flex items-center gap-2 mb-3">
+                <Pizza className="w-4 h-4 text-crust-600 dark:text-crumb-400" />
+                <span className="font-medium text-crust-800 dark:text-crumb-100">Yield</span>
+              </div>
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <p className="text-lg font-semibold text-crust-800 dark:text-crumb-100">{recipe.yield.balls}</p>
+                  <p className="text-xs text-crust-500 dark:text-crumb-500">Dough balls</p>
+                </div>
+                <div>
+                  <p className="text-lg font-semibold text-crust-800 dark:text-crumb-100">{recipe.yield.ballWeightG} g</p>
+                  <p className="text-xs text-crust-500 dark:text-crumb-500">Per ball</p>
+                </div>
+                <div>
+                  <p className="text-lg font-semibold text-crust-800 dark:text-crumb-100">{recipe.yield.pizzaDiameterCm} cm</p>
+                  <p className="text-xs text-crust-500 dark:text-crumb-500">Diameter</p>
+                </div>
+              </div>
+              {recipe.totalDoughWeight && (
+                <p className="text-xs text-center text-crust-500 dark:text-crumb-500 mt-3">
+                  ~{recipe.totalDoughWeight} g total dough
+                </p>
+              )}
+            </Card>
+          </motion.div>
+        )}
+
+        {/* Ingredients (weighed list with baker's %) */}
+        {recipe.ingredients && recipe.ingredients.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.14 }}
+          >
+            <h2 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-3">
+              Ingredients
+            </h2>
+            <Card padding="md">
+              <div className="space-y-2">
+                {recipe.ingredients.map((ingredient, i) => (
+                  <div key={i} className="flex justify-between items-baseline gap-3">
+                    <span className="text-crust-700 dark:text-crumb-300">{ingredient.name}</span>
+                    <span className="flex items-baseline gap-2 flex-shrink-0">
+                      <span className="font-medium text-crust-800 dark:text-crumb-100">
+                        {ingredient.amount} {ingredient.unit}
+                      </span>
+                      <span className="text-xs text-crust-500 dark:text-crumb-500">
+                        {ingredient.bakersPercent}%
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </motion.div>
+        )}
+
         {/* Flour Breakdown */}
         {recipe.flourBreakdown.length > 0 && (
           <motion.div
@@ -342,6 +423,22 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
                         <span>Wait: {step.waitTime} min</span>
                       )}
                     </div>
+                    {(step.mixer || step.timerSeconds) && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {step.mixer && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-crust-100 dark:bg-crust-800 text-crust-700 dark:text-crumb-300">
+                            <Gauge className="w-3 h-3" />
+                            {step.mixer.percent}% · {step.mixer.rpm} RPM
+                          </span>
+                        )}
+                        {step.timerSeconds != null && step.timerSeconds > 0 && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-honey-100 dark:bg-honey-950/30 text-honey-700 dark:text-honey-300">
+                            <Timer className="w-3 h-3" />
+                            {formatTimer(step.timerSeconds)}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </Card>
