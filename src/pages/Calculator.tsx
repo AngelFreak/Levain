@@ -28,6 +28,7 @@ import {
   scheduleTimelineNotifications,
   showPersistentBakeNotification,
 } from '../lib/notifications';
+import { allocateTimelineBaseId } from '../lib/notificationIds';
 import type {
   ReverseCalculatorOutput,
   ScheduleStep,
@@ -162,8 +163,8 @@ function ReverseTimeCalculator() {
       // Convert schedule steps to timeline steps
       const timelineSteps = convertToTimelineSteps(result.schedule);
 
-      // Generate a unique base ID for notifications
-      const baseNotificationId = Date.now();
+      // Allocate a collision-free notification block for this timeline.
+      const baseNotificationId = await allocateTimelineBaseId();
 
       // Create notifications for each step
       const notifications = createStepNotifications(timelineSteps, baseNotificationId);

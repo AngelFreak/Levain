@@ -97,7 +97,13 @@ be assigned the same notification ID; existing reminders survive the upgrade.
 **Tests:** create 2 active timelines → both reachable; 50 starters → unique
 reminder IDs; upgrade path reschedules without duplicate/dropped notifications.
 
-**Status:** Not Started
+**Status:** Complete — `src/lib/notificationIds.ts` owns partitioned, persisted
+ID allocation (feeding reminders sequential from 100; timeline blocks from
+100_000); `Date.now()` bases and the uuid-hash removed; `getActiveTimelines()`
+added and Home/ActiveBakePage reach all active timelines by id; starter delete
+cancels+releases its reminder; one-shot `migrateNotificationScheme()` cancels
+stale notifications and App rebuilds feeding reminders from data. Verified in
+browser (feeding → id:100; two timelines both reachable independently).
 
 ---
 

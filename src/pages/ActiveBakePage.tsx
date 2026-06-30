@@ -14,7 +14,7 @@ import {
 import { Card, Button } from '../components/ui';
 import { useAppStore } from '../stores/appStore';
 import { useSettingsStore } from '../stores/settingsStore';
-import { db, createBakeFromTimeline } from '../lib/db';
+import { db, createBakeFromTimeline, getActiveTimelines } from '../lib/db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   cancelBakeNotifications,
@@ -25,7 +25,12 @@ import { formatTime } from '../lib/fermentation';
 import type { ActiveTimeline, TimelineStep, Rating } from '../types';
 import { formatDistanceToNow } from 'date-fns';
 
-export function ActiveBakePage() {
+interface ActiveBakePageProps {
+  /** Open a specific timeline; falls back to the soonest active one. */
+  timelineId?: string;
+}
+
+export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
   const { goBackFromPage, showToast } = useAppStore();
   const { settings } = useSettingsStore();
   const [expandedStep, setExpandedStep] = useState<string | null>(null);
@@ -34,11 +39,16 @@ export function ActiveBakePage() {
   const [completeNotes, setCompleteNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Get active timeline with live updates
-  const timeline = useLiveQuery(
-    () => db.activeTimelines.where('status').equals('active').first(),
-    []
-  ) as ActiveTimeline | undefined;
+  // Live-load the requested timeline, or the soonest active one if none given,
+  // so multiple concurrent bakes are each reachable (no stranded timelines).
+  const timeline = useLiveQuery(async () => {
+    if (timelineId) {
+      return db.activeTimelines.where('uuid').equals(timelineId).first();
+    }
+    const active = await db.activeTimelines.where('status').equals('active').toArray();
+    active.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    return active[0];
+  }, [timelineId]) as ActiveTimeline | undefined;
 
   // Auto-expand current step
   useEffect(() => {
@@ -54,6 +64,21 @@ export function ActiveBakePage() {
 
     showPersistentBakeNotification(timeline.name);
   }, [timeline?.status, timeline?.name]);
+
+  // Cancel the shared persistent bake notification only when no other timeline
+  // is still active. `justEndedUuid` is the one we just completed/abandoned;
+  // by call time its status is already updated in the DB.
+  const clearPersistentIfLastActive = async (justEndedUuid: string) => {
+    const stillActive = (await getActiveTimelines()).filter(
+      (t) => t.uuid !== justEndedUuid
+    );
+    if (stillActive.length === 0) {
+      await cancelPersistentBakeNotification();
+    } else {
+      // Keep the persistent notification, but point it at a remaining bake.
+      await showPersistentBakeNotification(stillActive[0].name);
+    }
+  };
 
   const handleCompleteStep = async (stepIndex: number) => {
     if (!timeline?.id) return;
@@ -87,8 +112,9 @@ export function ActiveBakePage() {
             await cancelBakeNotifications(notificationIds);
           }
         }
-        // Cancel persistent notification when bake is complete
-        await cancelPersistentBakeNotification();
+        // Only clear the persistent notification if no other bake is still
+        // active (multiple concurrent timelines share one persistent slot).
+        await clearPersistentIfLastActive(timeline.uuid);
         // Show completion modal for rating
         setShowCompleteModal(true);
       }
@@ -112,12 +138,12 @@ export function ActiveBakePage() {
         }
       }
 
-      // Cancel persistent notification
-      await cancelPersistentBakeNotification();
-
       await db.activeTimelines.update(timeline.id, {
         status: 'abandoned',
       });
+      // Clear the shared persistent notification only if this was the last
+      // active bake (status is now updated, so exclude nothing).
+      await clearPersistentIfLastActive(timeline.uuid);
       showToast('Bake abandoned', 'info');
       goBackFromPage();
     } catch (error) {

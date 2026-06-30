@@ -30,10 +30,13 @@ export function HomePage() {
     []
   );
 
-  const activeTimeline = useLiveQuery(
-    () => db.activeTimelines.where('status').equals('active').first(),
-    []
-  ) as ActiveTimeline | undefined;
+  // All active timelines (not just the first) so concurrent bakes are reachable.
+  const activeTimelines = useLiveQuery(async () => {
+    const active = await db.activeTimelines.where('status').equals('active').toArray();
+    return active.sort(
+      (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+    );
+  }, []) as ActiveTimeline[] | undefined;
 
   return (
     <div className="px-4 pt-6 pb-4">
@@ -67,45 +70,49 @@ export function HomePage() {
       </motion.div>
 
       {/* Active Bake Banner */}
-      {activeTimeline && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="mb-6"
-        >
-          <Card
-            variant="elevated"
-            padding="none"
-            pressable
-            onPress={() => navigateTo('active-bake')}
-            className="bg-gradient-to-br from-crust-600 to-crust-700 text-white overflow-hidden"
-          >
-            <div className="p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Timer className="w-4 h-4" />
-                <span className="text-xs font-medium uppercase tracking-wide opacity-90">
-                  Active Bake
-                </span>
-              </div>
-              <h3 className="text-lg font-semibold mb-1">{activeTimeline.name}</h3>
-              <div className="flex items-center gap-4 text-sm opacity-90">
-                <span>
-                  Step {activeTimeline.currentStepIndex + 1} of{' '}
-                  {activeTimeline.steps.length}
-                </span>
-                <ChevronRight className="w-4 h-4" />
-              </div>
-            </div>
-            <div className="h-1 bg-white/20">
-              <div
-                className="h-full bg-white/80"
-                style={{
-                  width: `${((activeTimeline.currentStepIndex + 1) / activeTimeline.steps.length) * 100}%`,
-                }}
-              />
-            </div>
-          </Card>
-        </motion.div>
+      {activeTimelines && activeTimelines.length > 0 && (
+        <div className="mb-6 space-y-3">
+          {activeTimelines.map((timeline, index) => (
+            <motion.div
+              key={timeline.uuid}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: index * 0.05 }}
+            >
+              <Card
+                variant="elevated"
+                padding="none"
+                pressable
+                onPress={() => navigateTo('active-bake', { timelineId: timeline.uuid })}
+                className="bg-gradient-to-br from-crust-600 to-crust-700 text-white overflow-hidden"
+              >
+                <div className="p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Timer className="w-4 h-4" />
+                    <span className="text-xs font-medium uppercase tracking-wide opacity-90">
+                      {activeTimelines.length > 1 ? `Active Bake ${index + 1}` : 'Active Bake'}
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-semibold mb-1">{timeline.name}</h3>
+                  <div className="flex items-center gap-4 text-sm opacity-90">
+                    <span>
+                      Step {timeline.currentStepIndex + 1} of {timeline.steps.length}
+                    </span>
+                    <ChevronRight className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="h-1 bg-white/20">
+                  <div
+                    className="h-full bg-white/80"
+                    style={{
+                      width: `${((timeline.currentStepIndex + 1) / timeline.steps.length) * 100}%`,
+                    }}
+                  />
+                </div>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
       )}
 
       {/* Bake Button */}

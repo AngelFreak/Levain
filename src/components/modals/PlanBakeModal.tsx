@@ -9,6 +9,7 @@ import {
   scheduleTimelineNotifications,
   showPersistentBakeNotification,
 } from '../../lib/notifications';
+import { allocateTimelineBaseId } from '../../lib/notificationIds';
 import {
   isNightHour,
   getNextAwakeTime,
@@ -626,7 +627,7 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
 
     setIsSubmitting(true);
     try {
-      const baseNotificationId = Date.now();
+      const baseNotificationId = await allocateTimelineBaseId();
       const notifications = createStepNotifications(schedule.steps, baseNotificationId);
 
       const timeline: ActiveTimeline = {

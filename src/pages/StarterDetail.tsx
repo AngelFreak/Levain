@@ -27,7 +27,8 @@ import { useAppStore } from '../stores/appStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { db } from '../lib/db';
 import { formatTime } from '../lib/fermentation';
-import { rescheduleFeedingReminder } from '../lib/notifications';
+import { rescheduleFeedingReminder, cancelFeedingReminder } from '../lib/notifications';
+import { releaseFeedingReminderId } from '../lib/notificationIds';
 import {
   getStorageLocation,
   getStorageLocationMeta,
@@ -85,6 +86,9 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
     if (!starter?.id) return;
 
     try {
+      // Cancel any scheduled feeding reminder and free its notification ID.
+      await cancelFeedingReminder(starter);
+      await releaseFeedingReminderId(starter.uuid);
       // Delete all feedings for this starter
       await db.feedings.where('starterId').equals(starterId).delete();
       // Delete the starter

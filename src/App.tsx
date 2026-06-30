@@ -7,7 +7,7 @@ import { PermissionPrompt } from './components/PermissionPrompt';
 import { useAppStore } from './stores/appStore';
 import { useSettingsStore } from './stores/settingsStore';
 import { hasShownPermissionPrompt } from './lib/permissions';
-import { initializeNotifications } from './lib/notifications';
+import { initializeNotifications, migrateNotificationScheme, rescheduleFeedingReminder } from './lib/notifications';
 import { DEFAULT_RECIPES } from './data/defaultRecipes';
 import { db, generateUUID } from './lib/db';
 import type { Recipe } from './types';
@@ -53,9 +53,28 @@ function App() {
     }
   }, [activeModal, modalData]);
 
-  // Initialize notifications on app startup
+  // Initialize notifications on app startup, then migrate the notification-ID
+  // scheme once (cancels stale notifications) and rebuild feeding reminders
+  // from current starter data under the new collision-free IDs.
   useEffect(() => {
-    initializeNotifications();
+    const run = async () => {
+      await initializeNotifications();
+      const migrated = await migrateNotificationScheme();
+      if (migrated && settings.notificationsEnabled) {
+        const starters = await db.starters.toArray();
+        for (const starter of starters) {
+          await rescheduleFeedingReminder(
+            starter,
+            settings.feedingRemindersEnabled,
+            settings.feedingReminderHours
+          );
+        }
+      }
+    };
+    run();
+    // Runs once on mount; settings are read at run time. Intentionally not
+    // re-running on settings changes (migration is one-shot, guarded by a flag).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Check for first launch permission prompt
@@ -228,7 +247,7 @@ function App() {
                 <RecipeDetailPage recipeId={(pageData as { recipeId: string }).recipeId} />
               )}
               {activePage === 'active-bake' && (
-                <ActiveBakePage />
+                <ActiveBakePage timelineId={(pageData as { timelineId?: string })?.timelineId} />
               )}
             </motion.main>
           ) : (

@@ -140,6 +140,16 @@ export async function getActiveTimeline(): Promise<ActiveTimeline | undefined> {
   return db.activeTimelines.where('status').equals('active').first();
 }
 
+// All currently-active timelines, soonest-started first. Use this instead of
+// getActiveTimeline() anywhere more than one bake could be running, so no active
+// timeline is ever stranded/inaccessible.
+export async function getActiveTimelines(): Promise<ActiveTimeline[]> {
+  const timelines = await db.activeTimelines.where('status').equals('active').toArray();
+  return timelines.sort(
+    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+  );
+}
+
 // Create a Bake journal entry from a completed ActiveTimeline
 export async function createBakeFromTimeline(
   timeline: ActiveTimeline,
