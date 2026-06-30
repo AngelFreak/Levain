@@ -19,7 +19,7 @@ import {
   formatTime,
   formatDate,
 } from '../lib/fermentation';
-import { db } from '../lib/db';
+import { db, getActiveTimelines } from '../lib/db';
 import { useAppStore } from '../stores/appStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import {
@@ -186,9 +186,11 @@ function ReverseTimeCalculator() {
       // Save to database
       await db.activeTimelines.add(timeline);
 
-      // Show persistent notification for the active bake
+      // Show persistent notification for the active bake (summarizing the count
+      // if other bakes are already running).
       if (settings.notificationsEnabled) {
-        await showPersistentBakeNotification(timeline.name);
+        const activeCount = await getActiveTimelines().then((a) => a.length);
+        await showPersistentBakeNotification(timeline.name, activeCount);
       }
 
       // Schedule notifications only if user has them enabled in settings

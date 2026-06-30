@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ChefHat, Clock, Droplets, Moon, Play, Snowflake, Sun, Wheat, Zap } from 'lucide-react';
 import { Button, BottomSheet, Slider } from '../ui';
-import { db } from '../../lib/db';
+import { db, getActiveTimelines } from '../../lib/db';
 import { useAppStore } from '../../stores/appStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import {
@@ -646,9 +646,11 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
 
       await db.activeTimelines.add(timeline);
 
-      // Show persistent notification for the active bake
+      // Show persistent notification for the active bake (summarizing the count
+      // if other bakes are already running).
       if (settings.notificationsEnabled) {
-        await showPersistentBakeNotification(recipe.name);
+        const activeCount = await getActiveTimelines().then((a) => a.length);
+        await showPersistentBakeNotification(recipe.name, activeCount);
       }
 
       if (recipe.id) {

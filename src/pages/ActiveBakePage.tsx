@@ -57,12 +57,13 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
     }
   }, [timeline?.currentStepIndex]);
 
-  // Show persistent notification when bake is active
-  // Show persistent notification when bake starts
+  // Show persistent notification when a bake is active, summarizing the count
+  // if more than one timeline is running.
   useEffect(() => {
     if (!timeline || timeline.status !== 'active') return;
-
-    showPersistentBakeNotification(timeline.name);
+    getActiveTimelines().then((active) =>
+      showPersistentBakeNotification(timeline.name, active.length)
+    );
   }, [timeline?.status, timeline?.name]);
 
   // Cancel the shared persistent bake notification only when no other timeline
@@ -75,8 +76,9 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
     if (stillActive.length === 0) {
       await cancelPersistentBakeNotification();
     } else {
-      // Keep the persistent notification, but point it at a remaining bake.
-      await showPersistentBakeNotification(stillActive[0].name);
+      // Keep the persistent notification, pointing at a remaining bake and
+      // reflecting how many are still running.
+      await showPersistentBakeNotification(stillActive[0].name, stillActive.length);
     }
   };
 

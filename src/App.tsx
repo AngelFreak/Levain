@@ -18,6 +18,7 @@ import {
   StarterDetailPage,
   RecipeDetailPage,
   BakeDetailPage,
+  BakeComparePage,
   ActiveBakePage,
   BookPage,
   SettingsPage,
@@ -249,6 +250,9 @@ function App() {
               )}
               {activePage === 'bake-detail' && (pageData as { bakeId: string })?.bakeId && (
                 <BakeDetailPage bakeId={(pageData as { bakeId: string }).bakeId} />
+              )}
+              {activePage === 'bake-compare' && (pageData as { bakeIds: string[] })?.bakeIds && (
+                <BakeComparePage bakeIds={(pageData as { bakeIds: string[] }).bakeIds} />
               )}
               {activePage === 'active-bake' && (
                 <ActiveBakePage timelineId={(pageData as { timelineId?: string })?.timelineId} />

@@ -381,14 +381,23 @@ export async function getPendingFeedingReminders(): Promise<
 }
 
 /**
- * Show a persistent notification for an active bake
- * This notification stays visible until the bake is complete or abandoned
+ * Show the persistent (ongoing) notification for active bakes. Stays visible
+ * until the last bake completes or is abandoned. There is a single persistent
+ * slot, so when more than one bake is active `activeCount` makes the body
+ * summarize them ("2 bakes in progress") while the title shows one bake's name.
+ *
+ * @param bakeName Name of the bake to feature in the title.
+ * @param activeCount Number of bakes currently active (defaults to 1).
  */
 export async function showPersistentBakeNotification(
-  bakeName: string
+  bakeName: string,
+  activeCount = 1
 ): Promise<void> {
+  const body =
+    activeCount > 1 ? `${activeCount} bakes in progress` : 'Bake in progress';
+
   if (!Capacitor.isNativePlatform()) {
-    console.log('Would show persistent notification:', bakeName);
+    console.log('Would show persistent notification:', bakeName, '—', body);
     return;
   }
 
@@ -412,8 +421,8 @@ export async function showPersistentBakeNotification(
       notifications: [
         {
           id: PERSISTENT_BAKE_NOTIFICATION_ID,
-          title: `🍞 ${bakeName}`,
-          body: 'Bake in progress',
+          title: activeCount > 1 ? `🍞 ${bakeName} +${activeCount - 1} more` : `🍞 ${bakeName}`,
+          body,
           ongoing: true, // Makes it persistent (can't be swiped away)
           autoCancel: false, // Don't auto-dismiss when tapped
           channelId: 'levain_persistent', // Silent channel - no vibration
@@ -426,7 +435,7 @@ export async function showPersistentBakeNotification(
         },
       ],
     });
-    console.log('Showing persistent bake notification:', bakeName);
+    console.log('Showing persistent bake notification:', bakeName, '—', body);
   } catch (error) {
     console.error('Failed to show persistent notification:', error);
   }

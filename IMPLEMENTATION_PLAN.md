@@ -326,7 +326,16 @@ and flags differences.
 **Tests:** 2 timelines → correct independent notifications; cancel one → other
 intact; persistent notification reflects count; comparison aligns 2 bakes.
 
-**Status:** Not Started
+**Status:** Complete — most multi-timeline UX landed in Stage 0 (Home lists all
+active bakes, ActiveBakePage opens one by id, persistent slot cleared only when
+the last bake ends). 6a: `showPersistentBakeNotification(name, activeCount)` now
+summarizes ("3 bakes in progress"); all callers pass the live count. 6b: new
+`BakeComparePage` (`bake-compare` route) shows ingredients/process/results
+side-by-side with only differing rows highlighted; the journal has a Compare
+mode (toggle → select cards with rings → "Compare N bakes" bar). Verified in
+browser: count=3 → "3 bakes in progress"; selecting two bakes opens the
+comparison with exactly the differing rows (hydration, oven, overall) highlighted.
+tsc+build clean, zero new lint errors.
 
 ---
 

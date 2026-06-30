@@ -4,6 +4,7 @@ export { StartersPage } from './Starters';
 export { StarterDetailPage } from './StarterDetail';
 export { RecipeDetailPage } from './RecipeDetail';
 export { BakeDetailPage } from './BakeDetail';
+export { BakeComparePage } from './BakeCompare';
 export { ActiveBakePage } from './ActiveBakePage';
 export { RecipesPage } from './Recipes';
 export { BookPage } from './Book';

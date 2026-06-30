@@ -42,7 +42,7 @@ interface AppState {
 
 export type TabName = 'home' | 'calculator' | 'starters' | 'book' | 'settings';
 
-export type PageType = 'starter-detail' | 'bake-detail' | 'recipe-detail' | 'active-bake';
+export type PageType = 'starter-detail' | 'bake-detail' | 'bake-compare' | 'recipe-detail' | 'active-bake';
 
 export type ModalType =
   | 'new-starter'

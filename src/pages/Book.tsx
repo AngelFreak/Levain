@@ -33,6 +33,10 @@ export function BookPage() {
   const [bakesFilter, setBakesFilter] = useState<'all' | 'favorites'>('all');
   const [journalSearch, setJournalSearch] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  // Compare mode: when on, tapping a bake toggles its selection instead of
+  // opening the detail. 2+ selected can be compared side-by-side.
+  const [compareMode, setCompareMode] = useState(false);
+  const [selectedForCompare, setSelectedForCompare] = useState<string[]>([]);
 
   // Recipes state
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -57,6 +61,16 @@ export function BookPage() {
     }
     return true;
   });
+
+  const toggleCompare = (uuid: string) =>
+    setSelectedForCompare((prev) =>
+      prev.includes(uuid) ? prev.filter((id) => id !== uuid) : [...prev, uuid]
+    );
+
+  const exitCompareMode = () => {
+    setCompareMode(false);
+    setSelectedForCompare([]);
+  };
 
   // Load bakes
   useEffect(() => {
@@ -352,7 +366,25 @@ export function BookPage() {
               >
                 Favorites
               </button>
+              {bakes.length >= 2 && (
+                <button
+                  onClick={() => (compareMode ? exitCompareMode() : setCompareMode(true))}
+                  className={`ml-auto px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                    compareMode
+                      ? 'bg-crust-600 text-white'
+                      : 'bg-crumb-200 dark:bg-crust-700 text-crust-600 dark:text-crumb-300'
+                  }`}
+                >
+                  {compareMode ? 'Done' : 'Compare'}
+                </button>
+              )}
             </div>
+
+            {compareMode && (
+              <p className="text-xs text-crust-500 dark:text-crumb-500 mb-2">
+                Select two or more bakes to compare.
+              </p>
+            )}
 
             {/* Journal search */}
             <div className="mb-2">
@@ -454,7 +486,16 @@ export function BookPage() {
                 variant="default"
                 padding="none"
                 pressable
-                onPress={() => navigateTo('bake-detail', { bakeId: bake.uuid })}
+                onPress={() =>
+                  compareMode
+                    ? toggleCompare(bake.uuid)
+                    : navigateTo('bake-detail', { bakeId: bake.uuid })
+                }
+                className={
+                  compareMode && selectedForCompare.includes(bake.uuid)
+                    ? 'ring-2 ring-crust-500'
+                    : ''
+                }
               >
                 <div className="flex">
                   {/* Photo */}
@@ -565,6 +606,21 @@ export function BookPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Floating compare action bar */}
+      {compareMode && selectedForCompare.length >= 2 && (
+        <div className="fixed bottom-24 left-4 right-4 z-20">
+          <Button
+            fullWidth
+            onClick={() => {
+              navigateTo('bake-compare', { bakeIds: selectedForCompare });
+              exitCompareMode();
+            }}
+          >
+            Compare {selectedForCompare.length} bakes
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
