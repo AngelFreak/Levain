@@ -484,7 +484,28 @@ reminder settings; never reappears after completion.
 **Tests:** first launch shows it; completion sets flag; relaunch skips; "import
 instead" hands off to Stage 1.
 
-**Status:** Not Started
+**Status:** Complete — `src/components/Onboarding.tsx` is a 4-step full-screen
+first-run flow (welcome → name-your-starter → kitchen temp + reminders → quick
+tour), with framer-motion step transitions and a labeled `role="dialog"` overlay.
+Step 2 creates the starter inline via the same `db.starters.add` shape as
+AddStarterModal (reuses its segmented flour-list pattern); an empty name turns the
+CTA into "Skip for now" so the step is optional. Step 3 writes `defaultAmbientTemp`
++ `feedingRemindersEnabled` to settings and requests notification permission when
+reminders are on — so onboarding subsumes the standalone `PermissionPrompt` for new
+users. Persistence follows the EXISTING convention (localStorage), not the plan's
+`@capacitor/preferences` guess: `permissions.ts` gains `hasCompletedOnboarding()` /
+`markOnboardingComplete()` (the latter also sets `permission_prompt_shown` so the
+bare prompt can't fire right after). App.tsx first-launch effect now shows
+onboarding when `!hasCompletedOnboarding()`, else falls back to the bare
+PermissionPrompt for pre-onboarding users (no retroactive onboarding). "I already
+have a backup — import it" marks complete, closes, and switches to the Settings tab
+where Stage 1's import flow lives. Verified live with Playwright (390×844): fresh
+install shows it; full flow creates the starter (confirmed in Dexie) and persists
+temp/reminders; tour lists all four tabs; "Start baking" sets both flags; reload
+shows neither onboarding nor the prompt; the import path navigates to Settings.
+tsc clean, build green, eslint unchanged (zero new). Test data cleaned up.
+
+**Status:** Complete
 
 ---
 

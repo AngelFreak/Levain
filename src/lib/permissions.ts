@@ -67,3 +67,23 @@ export function hasShownPermissionPrompt(): boolean {
 export function markPermissionPromptShown(): void {
   localStorage.setItem('permission_prompt_shown', 'true');
 }
+
+/**
+ * Whether the first-run onboarding walkthrough has been completed (or skipped).
+ * A truly fresh install has neither this flag nor the permission-prompt flag, so
+ * it gets onboarding; existing users keep their (already-set) permission flag and
+ * never see onboarding retroactively.
+ */
+export function hasCompletedOnboarding(): boolean {
+  return localStorage.getItem('onboarding_complete') === 'true';
+}
+
+/**
+ * Mark onboarding finished. Also marks the standalone permission prompt as shown,
+ * since onboarding asks for notification permission itself — this prevents the bare
+ * PermissionPrompt from appearing right after onboarding.
+ */
+export function markOnboardingComplete(): void {
+  localStorage.setItem('onboarding_complete', 'true');
+  markPermissionPromptShown();
+}

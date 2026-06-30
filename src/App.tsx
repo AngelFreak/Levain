@@ -4,9 +4,10 @@ import { App as CapApp } from '@capacitor/app';
 import { TabBar } from './components/ui';
 import { AddStarterModal, AddRecipeModal, FeedingModal, StartBakeModal, PlanBakeModal } from './components/modals';
 import { PermissionPrompt } from './components/PermissionPrompt';
+import { Onboarding } from './components/Onboarding';
 import { useAppStore } from './stores/appStore';
 import { useSettingsStore } from './stores/settingsStore';
-import { hasShownPermissionPrompt } from './lib/permissions';
+import { hasShownPermissionPrompt, hasCompletedOnboarding } from './lib/permissions';
 import { initializeNotifications, migrateNotificationScheme, rescheduleFeedingReminder } from './lib/notifications';
 import { DEFAULT_RECIPES } from './data/defaultRecipes';
 import { db, generateUUID } from './lib/db';
@@ -34,9 +35,10 @@ const pages = {
 };
 
 function App() {
-  const { activeTab, activePage, pageData, activeModal, modalData, closeModal, toast, hideToast, isOffline, goBack } = useAppStore();
+  const { activeTab, activePage, pageData, activeModal, modalData, closeModal, toast, hideToast, isOffline, goBack, setActiveTab } = useAppStore();
   const { settings } = useSettingsStore();
   const [showPermissionPrompt, setShowPermissionPrompt] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [planBakeRecipe, setPlanBakeRecipe] = useState<import('./types').Recipe | null>(null);
 
   // Fetch recipe when plan-bake modal opens
@@ -79,14 +81,18 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Check for first launch permission prompt
+  // First-launch flow. A fresh install (no onboarding flag) gets the onboarding
+  // walkthrough, which handles notification permission itself. Existing users who
+  // predate onboarding but never saw the permission prompt still get the bare
+  // prompt — they don't get onboarding retroactively.
   useEffect(() => {
-    // Small delay to let app render first
     const timer = setTimeout(() => {
-      if (!hasShownPermissionPrompt()) {
+      if (!hasCompletedOnboarding()) {
+        setShowOnboarding(true);
+      } else if (!hasShownPermissionPrompt()) {
         setShowPermissionPrompt(true);
       }
-    }, 1000);
+    }, 600);
     return () => clearTimeout(timer);
   }, []);
 
@@ -300,7 +306,14 @@ function App() {
         recipe={planBakeRecipe}
       />
 
-      {/* Permission Prompt (first launch only) */}
+      {/* First-run onboarding (fresh install only) */}
+      <Onboarding
+        isOpen={showOnboarding}
+        onClose={() => setShowOnboarding(false)}
+        onImport={() => setActiveTab('settings')}
+      />
+
+      {/* Permission Prompt (existing users who never saw it) */}
       <PermissionPrompt
         isOpen={showPermissionPrompt}
         onClose={() => setShowPermissionPrompt(false)}
