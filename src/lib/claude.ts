@@ -15,7 +15,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema';
 import { useSettingsStore } from '../stores/settingsStore';
 import type { PhotoBase64 } from './photos';
-import type { StarterAnalysis, StarterAnalysisContext } from '../types';
+import type { StarterAnalysis, StarterAnalysisContext, CrumbAnalysis } from '../types';
 import { classifyStage } from './starterStages';
 
 // Re-exported for callers that import the context type from here.
@@ -225,4 +225,123 @@ export async function analyzeStarter(
   };
 
   return { analysis, healthScore: clamp100(parsed.health) };
+}
+
+// ============================================================================
+// Crumb analysis
+// ============================================================================
+
+/** Optional context to sharpen the crumb assessment. */
+export interface CrumbAnalysisContext {
+  hydration?: number;
+  flourNote?: string;
+}
+
+// JSON schema mirroring CrumbAnalysis. Scores 0-100; proofing is a 3-way verdict.
+const CRUMB_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    summary: { type: 'string', description: 'One or two sentence overall assessment of the crumb.' },
+    openness: { type: 'integer', description: 'How open/airy the crumb is, 0-100.' },
+    evenness: { type: 'integer', description: 'How even the hole distribution is, 0-100.' },
+    fermentation: { type: 'integer', description: 'Apparent fermentation quality, 0-100.' },
+    gluten: { type: 'integer', description: 'Apparent gluten development / structure, 0-100.' },
+    proofingAssessment: {
+      type: 'string',
+      enum: ['under', 'good', 'over'],
+      description: 'Whether the loaf looks under-proofed, well-proofed, or over-proofed.',
+    },
+    confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+    observations: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'What is visible in the crumb (hole size/distribution, gumminess, walls, etc.).',
+    },
+    suggestions: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Actionable next steps to improve the crumb.',
+    },
+  },
+  required: [
+    'summary',
+    'openness',
+    'evenness',
+    'fermentation',
+    'gluten',
+    'proofingAssessment',
+    'confidence',
+    'observations',
+    'suggestions',
+  ],
+} as const;
+
+function buildCrumbPrompt(ctx: CrumbAnalysisContext): string {
+  const hyd = ctx.hydration != null ? `${ctx.hydration}% hydration` : 'unknown hydration';
+  return [
+    'You are an expert sourdough baker assessing the CRUMB of a baked loaf from a cross-section photo.',
+    'Judge how the bake turned out and whether the dough was under-, well-, or over-proofed.',
+    '',
+    'Signals to read:',
+    '- Hole size and distribution (open vs tight; even vs irregular tunnels/voids)',
+    '- Gumminess or dense gummy line (under-baked / under-proofed)',
+    '- Thin shiny cell walls and a slightly collapsed, very open structure (over-proofed)',
+    '- Overall fermentation and gluten development',
+    '',
+    `Context: ${hyd}.${ctx.flourNote ? ' ' + ctx.flourNote : ''}`,
+    '',
+    'Score openness, evenness, fermentation, and gluten from 0 to 100. Give a single proofing verdict (under/good/over). Be specific and practical in observations and suggestions.',
+  ].join('\n');
+}
+
+/**
+ * Analyze a crumb photo with Claude vision. Throws MissingApiKeyError if no key
+ * is configured, or surfaces the SDK's typed API errors.
+ */
+export async function analyzeCrumb(
+  photo: PhotoBase64,
+  ctx: CrumbAnalysisContext = {}
+): Promise<CrumbAnalysis> {
+  const client = createClient();
+
+  const message = await client.messages.parse({
+    model: MODEL,
+    max_tokens: 1024,
+    output_config: { format: jsonSchemaOutputFormat(CRUMB_SCHEMA) },
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: { type: 'base64', media_type: photo.mediaType, data: photo.data },
+          },
+          { type: 'text', text: buildCrumbPrompt(ctx) },
+        ],
+      },
+    ],
+  });
+
+  const parsed = message.parsed_output;
+  if (!parsed) {
+    throw new Error('Claude returned an unexpected response. Please try again.');
+  }
+
+  return {
+    timestamp: new Date(),
+    type: 'crumb',
+    source: 'claude',
+    summary: parsed.summary,
+    scores: {
+      openness: toRating(parsed.openness),
+      evenness: toRating(parsed.evenness),
+      fermentation: toRating(parsed.fermentation),
+      gluten: toRating(parsed.gluten),
+    },
+    proofingAssessment: parsed.proofingAssessment,
+    observations: parsed.observations ?? [],
+    suggestions: parsed.suggestions ?? [],
+    confidence: parsed.confidence,
+  };
 }

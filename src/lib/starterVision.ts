@@ -13,8 +13,11 @@ import type { PhotoBase64 } from './photos';
 import type { StarterAnalysis, StarterAnalysisContext } from '../types';
 import { classifyStage } from './starterStages';
 
-/** Raw image signals extracted from the photo. */
-interface ImageSignals {
+/**
+ * Raw image signals extracted from the photo. Shared by the starter and crumb
+ * on-device analyzers (see src/lib/crumbVision.ts).
+ */
+export interface ImageSignals {
   /** Fraction of pixels on a strong edge (0-1) — proxy for bubble density. */
   edgeDensity: number;
   /** Std-dev of luminance (0-1) — proxy for surface texture / doming. */
@@ -42,7 +45,7 @@ function toRating(score: number): Rating {
  * Decode the photo and extract luminance-based signals via an offscreen canvas.
  * Downscales to a small working size so it's fast even on a phone.
  */
-async function extractSignals(photo: PhotoBase64): Promise<ImageSignals> {
+export async function extractSignals(photo: PhotoBase64): Promise<ImageSignals> {
   const dataUrl = `data:${photo.mediaType};base64,${photo.data}`;
   const img = await loadImage(dataUrl);
 

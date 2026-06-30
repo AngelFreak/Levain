@@ -12,13 +12,21 @@ import {
   BookOpen,
   Beaker,
   ThermometerSun,
+  Sparkles,
+  Camera,
+  ImageIcon,
+  Lightbulb,
+  CheckCircle2,
 } from 'lucide-react';
-import { Card, Button } from '../components/ui';
+import { Card, Button, ActionSheet, Badge } from '../components/ui';
 import { EditBakeModal } from '../components/modals/EditBakeModal';
 import { useAppStore } from '../stores/appStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { db } from '../lib/db';
-import { format } from 'date-fns';
+import { takePhoto, photoToBase64 } from '../lib/photos';
+import { analyzeCrumb, MissingApiKeyError } from '../lib/claude';
+import { analyzeCrumbLocal } from '../lib/crumbVision';
+import { format, formatDistanceToNow } from 'date-fns';
 import type { Bake, Rating, Starter } from '../types';
 
 interface BakeDetailPageProps {
@@ -44,6 +52,17 @@ const SHAPE_LABELS: Record<string, string> = {
   other: 'Other',
 };
 
+const PROOF_LABEL: Record<'under' | 'good' | 'over', string> = {
+  under: 'Under-proofed',
+  good: 'Well proofed',
+  over: 'Over-proofed',
+};
+const PROOF_BADGE: Record<'under' | 'good' | 'over', 'warning' | 'success' | 'error'> = {
+  under: 'warning',
+  good: 'success',
+  over: 'error',
+};
+
 function Stars({ value }: { value: Rating }) {
   return (
     <div className="flex gap-0.5">
@@ -67,6 +86,9 @@ export function BakeDetailPage({ bakeId }: BakeDetailPageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [showEdit, setShowEdit] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showCrumbSheet, setShowCrumbSheet] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const hasClaudeKey = Boolean(settings.claudeApiKey?.trim());
 
   const loadBake = async () => {
     const data = await db.bakes.where('uuid').equals(bakeId).first();
@@ -101,6 +123,43 @@ export function BakeDetailPage({ bakeId }: BakeDetailPageProps) {
       goBackFromPage();
     } catch {
       showToast('Failed to delete bake', 'error');
+    }
+  };
+
+  const handleAnalyzeCrumb = async (source: 'camera' | 'gallery', method: 'local' | 'claude') => {
+    if (!bake?.id) return;
+    setIsAnalyzing(true);
+    try {
+      const photo = await takePhoto(source);
+      if (!photo) {
+        setIsAnalyzing(false);
+        return; // user cancelled
+      }
+      const base64 = await photoToBase64(photo);
+      if (!base64) {
+        showToast('Could not read that photo. Please try again.', 'error');
+        return;
+      }
+      const ctx = { hydration: bake.ingredients.hydration };
+      const analysis =
+        method === 'claude'
+          ? await analyzeCrumb(base64, ctx)
+          : await analyzeCrumbLocal(base64);
+
+      await db.bakes.update(bake.id, { crumbAnalysis: analysis });
+      setBake({ ...bake, crumbAnalysis: analysis });
+      showToast(method === 'claude' ? 'Analyzed with Claude!' : 'Quick estimate ready!', 'success');
+    } catch (error) {
+      if (error instanceof MissingApiKeyError) {
+        showToast(error.message, 'error');
+      } else {
+        console.error('Crumb analysis failed:', error);
+        const message =
+          error instanceof Error && error.message ? error.message : 'Analysis failed. Please try again.';
+        showToast(message, 'error');
+      }
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -309,6 +368,93 @@ export function BakeDetailPage({ bakeId }: BakeDetailPageProps) {
           </Card>
         </motion.div>
 
+        {/* Crumb analysis */}
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100">
+              Crumb analysis
+            </h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              isLoading={isAnalyzing}
+              onClick={() => setShowCrumbSheet(true)}
+            >
+              <Sparkles className="w-4 h-4" />
+              {bake.crumbAnalysis ? 'Re-analyze' : 'Analyze'}
+            </Button>
+          </div>
+
+          {bake.crumbAnalysis ? (
+            <Card padding="md">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-crust-700 dark:text-crumb-200">
+                  {bake.crumbAnalysis.source === 'claude' ? 'Claude Analysis' : 'Quick Estimate'}
+                </span>
+                <Badge variant={PROOF_BADGE[bake.crumbAnalysis.proofingAssessment]}>
+                  {bake.crumbAnalysis.proofingAssessment === 'good' && <CheckCircle2 className="w-3 h-3" />}
+                  {PROOF_LABEL[bake.crumbAnalysis.proofingAssessment]}
+                </Badge>
+              </div>
+
+              <p className="text-sm text-crust-600 dark:text-crumb-400 mb-3">
+                {bake.crumbAnalysis.summary}
+              </p>
+
+              {/* Scores */}
+              <div className="grid grid-cols-4 gap-2 text-center mb-3">
+                {([
+                  ['Open', bake.crumbAnalysis.scores.openness],
+                  ['Even', bake.crumbAnalysis.scores.evenness],
+                  ['Ferment', bake.crumbAnalysis.scores.fermentation],
+                  ['Gluten', bake.crumbAnalysis.scores.gluten],
+                ] as Array<[string, number]>).map(([label, val]) => (
+                  <div key={label}>
+                    <p className="text-lg font-semibold text-crust-800 dark:text-crumb-100">{val}/5</p>
+                    <p className="text-[10px] text-crust-500 dark:text-crumb-500">{label}</p>
+                  </div>
+                ))}
+              </div>
+
+              {bake.crumbAnalysis.observations.length > 0 && (
+                <ul className="space-y-1 mb-2">
+                  {bake.crumbAnalysis.observations.map((obs, i) => (
+                    <li key={i} className="text-sm text-crust-600 dark:text-crumb-400 flex gap-2">
+                      <span className="text-crust-400">•</span>
+                      <span>{obs}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {bake.crumbAnalysis.suggestions.map((tip, i) => (
+                <p key={i} className="text-sm text-honey-700 dark:text-honey-300 flex gap-2 mt-1">
+                  <Lightbulb className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <span>{tip}</span>
+                </p>
+              ))}
+
+              <p className="text-xs text-crust-400 dark:text-crumb-600 mt-3">
+                {bake.crumbAnalysis.source === 'on-device'
+                  ? 'On-device estimate'
+                  : `${bake.crumbAnalysis.confidence} confidence`}{' '}
+                · analyzed {formatDistanceToNow(new Date(bake.crumbAnalysis.timestamp))} ago
+              </p>
+              {bake.crumbAnalysis.source === 'on-device' && !hasClaudeKey && (
+                <p className="text-xs text-crust-500 dark:text-crumb-500 mt-1">
+                  Add a Claude API key in Settings for richer, photo-based feedback.
+                </p>
+              )}
+            </Card>
+          ) : (
+            <Card padding="md">
+              <p className="text-sm text-crust-500 dark:text-crumb-500">
+                Take or pick a photo of the crumb (the sliced cross-section) for a read on
+                openness, evenness, and proofing.
+              </p>
+            </Card>
+          )}
+        </motion.div>
+
         {/* Notes */}
         {bake.notes && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
@@ -335,8 +481,6 @@ export function BakeDetailPage({ bakeId }: BakeDetailPageProps) {
           </motion.div>
         )}
 
-        {/* Settings reference (units) — keep referenced to avoid unused warning */}
-        <span className="hidden">{settings.temperatureUnit}</span>
       </div>
 
       <EditBakeModal
@@ -344,6 +488,39 @@ export function BakeDetailPage({ bakeId }: BakeDetailPageProps) {
         onClose={() => setShowEdit(false)}
         bakeId={bake.uuid}
         onSave={loadBake}
+      />
+
+      {/* Crumb-analysis source picker */}
+      <ActionSheet
+        isOpen={showCrumbSheet}
+        onClose={() => setShowCrumbSheet(false)}
+        title="Analyze crumb photo"
+        actions={[
+          {
+            label: 'Quick estimate · Camera',
+            icon: <Camera className="w-5 h-5" />,
+            onClick: () => handleAnalyzeCrumb('camera', 'local'),
+          },
+          {
+            label: 'Quick estimate · Gallery',
+            icon: <ImageIcon className="w-5 h-5" />,
+            onClick: () => handleAnalyzeCrumb('gallery', 'local'),
+          },
+          ...(hasClaudeKey
+            ? [
+                {
+                  label: 'Claude analysis · Camera',
+                  icon: <Sparkles className="w-5 h-5" />,
+                  onClick: () => handleAnalyzeCrumb('camera', 'claude'),
+                },
+                {
+                  label: 'Claude analysis · Gallery',
+                  icon: <Sparkles className="w-5 h-5" />,
+                  onClick: () => handleAnalyzeCrumb('gallery', 'claude'),
+                },
+              ]
+            : []),
+        ]}
       />
 
       {showDeleteConfirm && (

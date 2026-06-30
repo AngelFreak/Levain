@@ -230,6 +230,8 @@ export interface Bake {
   results: BakeResults;
   photos: BakePhoto[];
   aiAnalysis?: BakeAIAnalysis;
+  /** Most recent crumb photo analysis (Claude or on-device), if any. */
+  crumbAnalysis?: CrumbAnalysis;
   notes: string;
   tags: string[];
   isFavorite: boolean;

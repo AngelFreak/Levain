@@ -265,7 +265,18 @@ a key → on-device estimate offline; UI mirrors the starter card.
 **Tests:** key → Claude path; no key → on-device, no crash; persists + survives
 reload.
 
-**Status:** Not Started
+**Status:** Complete — `analyzeCrumb` in claude.ts returns a CrumbAnalysis
+(openness/evenness/fermentation/gluten + under/good/over verdict) via the same
+Haiku vision + JSON-schema pattern as the starter analyzer. New
+`src/lib/crumbVision.ts` is the offline fallback, reusing the shared (now
+exported) `extractSignals`. Added optional `crumbAnalysis` to the Bake type.
+BakeDetail has an "Analyze crumb" ActionSheet (camera/gallery × on-device/Claude,
+Claude options gated on an API key), stores the result on the bake, and renders a
+card mirroring the starter analysis card (scores, proofing badge, observations,
+suggestions, on-device/confidence footer). Verified in browser: on-device path
+runs offline and differentiates open vs tight crumb (tight → "under-proofed");
+result persists; card renders; Claude options hidden without a key. tsc+build
+clean, zero new lint errors.
 
 ---
 
