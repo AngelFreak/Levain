@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
@@ -44,7 +45,6 @@ import { analyzeStarter, MissingApiKeyError } from '../lib/claude';
 import { analyzeStarterLocal } from '../lib/starterVision';
 import { stageBadgeVariant } from '../lib/starterStages';
 import { differenceInDays } from 'date-fns';
-import type { Starter, Feeding } from '../types';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useTranslation } from '../lib/i18n/useTranslation';
 
@@ -57,9 +57,6 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
   const { settings } = useSettingsStore();
   const { t } = useTranslation();
   const hasClaudeKey = Boolean(settings.claudeApiKey?.trim());
-  const [starter, setStarter] = useState<Starter | null>(null);
-  const [feedings, setFeedings] = useState<Feeding[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPhotoSheet, setShowPhotoSheet] = useState(false);
@@ -67,31 +64,28 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
   const [showPlanFeed, setShowPlanFeed] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
+  // Live queries so the page reacts to DB changes (feeding, peak-mark, edits,
+  // location changes) without needing to navigate away and back.
+  // `undefined` = still loading (first run); a row or `null` = resolved.
+  const starterResult = useLiveQuery(
+    () => db.starters.where('uuid').equals(starterId).first(),
+    [starterId]
+  );
+  const starter = starterResult ?? null;
+  const isLoading = starterResult === undefined;
+
+  const feedings = useLiveQuery(async () => {
+    const rows = await db.feedings.where('starterId').equals(starterId).toArray();
+    rows.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return rows;
+  }, [starterId]) ?? [];
+
+  // Keep feeding-derived stats fresh whenever the feedings change. Writing the
+  // recomputed stats back to the starter row re-triggers the starter live query,
+  // so tiles/averages update in place. Guard prevents redundant recompute loops.
   useEffect(() => {
-    const loadData = async () => {
-      // Self-heal: recompute feeding-derived stats so the tiles reflect the
-      // latest feedings even if they changed elsewhere (single write path).
-      await recomputeStarterStats(starterId);
-
-      // Load starter (after recompute, so averagePeakTime/feedingStats are fresh)
-      const starterData = await db.starters.where('uuid').equals(starterId).first();
-      if (starterData) {
-        setStarter(starterData);
-      }
-
-      // Load feedings for this starter, sorted by timestamp descending (newest first)
-      const feedingsData = await db.feedings
-        .where('starterId')
-        .equals(starterId)
-        .toArray();
-      // Sort in memory by timestamp descending
-      feedingsData.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      setFeedings(feedingsData);
-      setIsLoading(false);
-    };
-
-    loadData();
-  }, [starterId]);
+    recomputeStarterStats(starterId);
+  }, [starterId, feedings.length]);
 
   // Stamp the current time as the peak for the most recent feeding that hasn't
   // recorded one yet, then recompute stats. This is the capture path that makes
@@ -111,14 +105,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
     try {
       await db.feedings.update(latestUnpeaked.id, { peakTime: new Date() });
       await recomputeStarterStats(starterId);
-      // Refresh local state
-      const [starterData, feedingsData] = await Promise.all([
-        db.starters.where('uuid').equals(starterId).first(),
-        db.feedings.where('starterId').equals(starterId).toArray(),
-      ]);
-      if (starterData) setStarter(starterData);
-      feedingsData.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      setFeedings(feedingsData);
+      // Live queries pick up the DB changes automatically.
       showToast(t('starterDetail.toastPeakRecorded', { hours: Math.round(hours) }), 'success');
     } catch (error) {
       console.error('Failed to mark peak:', error);
@@ -152,10 +139,10 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
       await db.starters.update(starter.id, { storageLocation: location });
 
       // Re-read so we reschedule against the freshest lastFed (e.g. if the
-      // starter was fed via the modal since this page mounted).
+      // starter was fed via the modal since this page mounted). The live query
+      // reflects the DB write; `updated` is just the value passed to reschedule.
       const fresh = (await db.starters.get(starter.id)) ?? starter;
       const updated = { ...fresh, storageLocation: location };
-      setStarter(updated);
 
       // Move between room/fridge changes the feeding cadence — reschedule the
       // pending reminder relative to the last feeding using the new interval.
@@ -193,7 +180,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
   const handleUsedDiscard = async () => {
     if (!starter) return;
     await resetStarterDiscard(starter.uuid);
-    setStarter({ ...starter, discardGrams: 0 });
+    // Live query reflects the reset discardGrams.
     showToast(t('starterDetail.toastDiscardCleared'), 'success');
   };
 
@@ -233,7 +220,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
           : await analyzeStarterLocal(base64, ctx);
 
       await db.starters.update(starter.id, { healthScore, lastAnalysis: analysis });
-      setStarter({ ...starter, healthScore, lastAnalysis: analysis });
+      // Live query reflects the new analysis.
       showToast(
         method === 'claude'
           ? t('starterDetail.toastAnalyzedClaude')
@@ -300,6 +287,15 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
 
   const feedingStatus = getFeedingStatus(starter.lastFed);
   const peakHistory = computeNormalizedPeakSeries(feedings);
+
+  // A photo analysis describes the starter at the moment it was taken. Once the
+  // starter is fed after that, the estimate no longer reflects reality, so hide
+  // it (it's superseded). With the live query above, feeding hides it instantly.
+  const analysisIsCurrent =
+    !!starter.lastAnalysis &&
+    (!starter.lastFed ||
+      new Date(starter.lastAnalysis.timestamp).getTime() >=
+        new Date(starter.lastFed).getTime());
 
   return (
     <div className="px-4 pt-6 pb-24">
@@ -679,8 +675,9 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
         </Card>
       </motion.div>
 
-      {/* AI Analysis */}
-      {starter.lastAnalysis && (
+      {/* AI Analysis — only while it still reflects the current state (hidden
+          once the starter is fed after the analysis was taken). */}
+      {starter.lastAnalysis && analysisIsCurrent && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -879,7 +876,6 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
         starter={starter}
-        onSave={(updatedStarter) => setStarter(updatedStarter)}
       />
 
       <PlanFeedModal
