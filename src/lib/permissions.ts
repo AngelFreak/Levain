@@ -73,9 +73,16 @@ export function markPermissionPromptShown(): void {
  * A truly fresh install has neither this flag nor the permission-prompt flag, so
  * it gets onboarding; existing users keep their (already-set) permission flag and
  * never see onboarding retroactively.
+ *
+ * The `permission_prompt_shown` check is the existing-user sentinel: an install
+ * that predates onboarding already set that flag, so we treat it as "done" rather
+ * than dropping such users into a first-run flow on their next launch.
  */
 export function hasCompletedOnboarding(): boolean {
-  return localStorage.getItem('onboarding_complete') === 'true';
+  return (
+    localStorage.getItem('onboarding_complete') === 'true' ||
+    localStorage.getItem('permission_prompt_shown') === 'true'
+  );
 }
 
 /**

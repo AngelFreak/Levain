@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { motion, AnimatePresence, useDragControls, type PanInfo } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import { useTranslation } from '../../lib/i18n/useTranslation';
 
 interface BottomSheetProps {
   isOpen: boolean;
@@ -154,6 +155,7 @@ interface ActionSheetAction {
 }
 
 export function ActionSheet({ isOpen, onClose, title, actions }: ActionSheetProps) {
+  const { t } = useTranslation();
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title={title}>
       <div className="space-y-2">
@@ -186,7 +188,7 @@ export function ActionSheet({ isOpen, onClose, title, actions }: ActionSheetProp
         onClick={onClose}
         className="w-full mt-4 px-4 py-3.5 rounded-xl bg-crumb-100 dark:bg-crust-800 text-crust-700 dark:text-crumb-300 font-medium transition-colors hover:bg-crumb-200 dark:hover:bg-crust-700 touch-target"
       >
-        Cancel
+        {t('common.cancel')}
       </button>
     </BottomSheet>
   );

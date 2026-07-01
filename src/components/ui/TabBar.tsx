@@ -49,7 +49,7 @@ export function TabBar() {
     <nav
       className="flex-shrink-0 bg-surface1 dark:bg-surfaceDark1 border-t border-crumb-400/40 dark:border-crust-600/60 pb-safe"
       role="navigation"
-      aria-label="Main navigation"
+      aria-label={t('nav.mainNavigation')}
     >
       <div className="flex items-center justify-around px-2 py-1">
         {tabs.map((tab) => {

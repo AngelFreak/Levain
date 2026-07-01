@@ -17,6 +17,7 @@ import { useAppStore } from '../stores/appStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { requestNotificationPermission, markOnboardingComplete } from '../lib/permissions';
 import { useTranslation } from '../lib/i18n/useTranslation';
+import type { TranslationKey } from '../lib/i18n';
 
 interface OnboardingProps {
   isOpen: boolean;
@@ -29,11 +30,11 @@ interface OnboardingProps {
 type Step = 'welcome' | 'starter' | 'kitchen' | 'tour';
 const STEP_ORDER: Step[] = ['welcome', 'starter', 'kitchen', 'tour'];
 
-const FLOUR_OPTIONS = [
-  { value: 'white', label: 'White (AP/Bread)' },
-  { value: 'whole-wheat', label: 'Whole Wheat' },
-  { value: 'rye', label: 'Rye' },
-  { value: 'mixed', label: 'Mixed' },
+const FLOUR_OPTIONS: { value: string; labelKey: TranslationKey }[] = [
+  { value: 'white', labelKey: 'onboarding.flourWhite' },
+  { value: 'whole-wheat', labelKey: 'onboarding.flourWholeWheat' },
+  { value: 'rye', labelKey: 'onboarding.flourRye' },
+  { value: 'mixed', labelKey: 'onboarding.flourMixed' },
 ];
 
 export function Onboarding({ isOpen, onClose, onImport }: OnboardingProps) {
@@ -289,7 +290,7 @@ function StarterStep({
                     : 'text-crust-700 dark:text-crumb-200'
                 }`}
               >
-                {option.label}
+                {t(option.labelKey)}
               </span>
               {flourType === option.value && (
                 <div className="w-5 h-5 rounded-full bg-honey-500 flex items-center justify-center">

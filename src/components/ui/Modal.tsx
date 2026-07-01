@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from '../../lib/i18n/useTranslation';
 
 interface ModalProps {
   isOpen: boolean;
@@ -29,6 +30,7 @@ export function Modal({
 }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  const { t } = useTranslation();
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -98,7 +100,7 @@ export function Modal({
                 {showClose && (
                   <button
                     onClick={onClose}
-                    aria-label="Close"
+                    aria-label={t('common.close')}
                     className="p-2 -m-2 text-crust-500 hover:text-crust-700 dark:text-crumb-500 dark:hover:text-crumb-300 touch-target"
                   >
                     <X className="w-5 h-5" />

@@ -403,6 +403,9 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
       {showCompleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bake-complete-title"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             className="bg-white dark:bg-crust-900 rounded-2xl p-6 max-w-sm w-full shadow-xl"
@@ -411,7 +414,7 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-success-100 dark:bg-success-900/30 flex items-center justify-center">
                 <CheckCircle2 className="w-8 h-8 text-success-500" />
               </div>
-              <h3 className="text-xl font-display font-bold text-crust-800 dark:text-crumb-100 mb-1">
+              <h3 id="bake-complete-title" className="text-xl font-display font-bold text-crust-800 dark:text-crumb-100 mb-1">
                 {t('activeBake.bakeComplete')}
               </h3>
               <p className="text-crust-600 dark:text-crumb-400">

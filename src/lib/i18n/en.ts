@@ -27,6 +27,7 @@ export const en = {
   'common.today': 'Today',
 
   // ---- Bottom navigation ----
+  'nav.mainNavigation': 'Main navigation',
   'nav.home': 'Home',
   'nav.calculate': 'Calculate',
   'nav.starters': 'Starters',
@@ -75,6 +76,10 @@ export const en = {
   'onboarding.tour.starters': 'Track feedings, peaks, and storage (room or fridge)',
   'onboarding.tour.book': 'Recipes plus your baking journal',
   'onboarding.tour.start': 'Start baking',
+  'onboarding.flourWhite': 'White (AP/Bread)',
+  'onboarding.flourWholeWheat': 'Whole Wheat',
+  'onboarding.flourRye': 'Rye',
+  'onboarding.flourMixed': 'Mixed',
   'onboarding.toast.starterReady': '{name} is ready!',
   'onboarding.toast.starterFailed': 'Could not create starter — you can add one later.',
   'onboarding.toast.permissionInfo':

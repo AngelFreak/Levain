@@ -26,6 +26,7 @@ export const da: Partial<Record<TranslationKey, string>> = {
   'common.today': 'I dag',
 
   // ---- Bottom navigation ----
+  'nav.mainNavigation': 'Hovednavigation',
   'nav.home': 'Hjem',
   'nav.calculate': 'Beregn',
   'nav.starters': 'Surdej',
@@ -56,7 +57,7 @@ export const da: Partial<Record<TranslationKey, string>> = {
     'Giv din kultur et navn for at begynde at registrere fodringer og toppe. Du kan tilføje flere senere.',
   'onboarding.starter.nameLabel': 'Surdejens navn',
   'onboarding.starter.namePlaceholder': 'f.eks. Boblen, Trofaste',
-  'onboarding.starter.flourLabel': 'Primær mel',
+  'onboarding.starter.flourLabel': 'Primært mel',
   'onboarding.starter.create': 'Opret surdej',
   'onboarding.starter.skip': 'Spring over nu',
   'onboarding.kitchen.title': 'Dit køkken',
@@ -74,6 +75,10 @@ export const da: Partial<Record<TranslationKey, string>> = {
   'onboarding.tour.starters': 'Følg fodringer, toppe og opbevaring (rum eller køleskab)',
   'onboarding.tour.book': 'Opskrifter plus din bagedagbog',
   'onboarding.tour.start': 'Begynd at bage',
+  'onboarding.flourWhite': 'Hvedemel (alm./brød)',
+  'onboarding.flourWholeWheat': 'Fuldkornshvede',
+  'onboarding.flourRye': 'Rug',
+  'onboarding.flourMixed': 'Blandet',
   'onboarding.toast.starterReady': '{name} er klar!',
   'onboarding.toast.starterFailed': 'Kunne ikke oprette surdej — du kan tilføje en senere.',
   'onboarding.toast.permissionInfo':
@@ -914,7 +919,7 @@ export const da: Partial<Record<TranslationKey, string>> = {
   'starterDetail.feedingCountOther': '{count} fodringer',
   'starterDetail.feedingHistory': 'Fodringshistorik',
   'starterDetail.feedNow': 'Fodr nu',
-  'starterDetail.flourLabel': '{flour}mel',
+  'starterDetail.flourLabel': '{flour} mel',
   'starterDetail.fridge': 'Køleskab',
   'starterDetail.healthScore': 'Sundhedsscore',
   'starterDetail.help.deepAnalysisBody': 'Sender billedet til Claude for rigere og mere detaljerede råd. Tilføj en Anthropic API-nøgle under Indstillinger for at låse det op — det koster en brøkdel af en øre per analyse.',

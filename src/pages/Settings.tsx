@@ -599,11 +599,14 @@ export function SettingsPage() {
       {pendingImport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-restore-title"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             className="bg-white dark:bg-crust-900 rounded-2xl p-6 max-w-sm w-full shadow-xl"
           >
-            <h3 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-1">
+            <h3 id="settings-restore-title" className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-1">
               {t('settings.restoreFromBackup')}
             </h3>
             <p className="text-sm text-crust-600 dark:text-crumb-400 mb-1">

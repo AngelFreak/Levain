@@ -527,11 +527,14 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="recipe-delete-confirm-title"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             className="bg-white dark:bg-crust-900 rounded-2xl p-6 max-w-sm w-full shadow-xl"
           >
-            <h3 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-2">
+            <h3 id="recipe-delete-confirm-title" className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-2">
               {t('recipeDetail.deleteConfirmTitle')}
             </h3>
             <p className="text-crust-600 dark:text-crumb-400 mb-6">
