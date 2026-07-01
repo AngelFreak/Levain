@@ -58,3 +58,29 @@ export function formatNumber(
 ): string {
   return value.toLocaleString(intlLocale(language), opts);
 }
+
+/**
+ * Localized short date for schedule rows: "Today"/"Tomorrow" (translated) or a
+ * locale-formatted weekday+date. Replaces the en-US/hardcoded formatDate in
+ * lib/fermentation.ts at the display boundary. Takes a `t` so the relative-day
+ * words come from the catalog.
+ */
+export function formatScheduleDate(
+  date: Date,
+  language: Language,
+  t: (key: 'common.today' | 'common.tomorrow') => string
+): string {
+  const d = new Date(date);
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  if (d.toDateString() === today.toDateString()) return t('common.today');
+  if (d.toDateString() === tomorrow.toDateString()) return t('common.tomorrow');
+
+  return d.toLocaleDateString(intlLocale(language), {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+}

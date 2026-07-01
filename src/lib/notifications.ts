@@ -144,6 +144,12 @@ export function convertToTimelineSteps(scheduleSteps: ScheduleStep[]): TimelineS
     duration: step.duration,
     status: 'pending' as const,
     photoPrompt: step.photoPrompt,
+    tips: step.tips,
+    // Carry i18n metadata so persisted timelines stay localizable at display time.
+    nameKey: step.nameKey,
+    descKey: step.descKey,
+    tipsKey: step.tipsKey,
+    i18nParams: step.i18nParams,
   }));
 }
 

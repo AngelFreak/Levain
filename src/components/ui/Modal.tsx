@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from '../../lib/i18n/useTranslation';
+import { useFocusTrap } from '../../lib/useFocusTrap';
 
 interface ModalProps {
   isOpen: boolean;
@@ -29,8 +30,11 @@ export function Modal({
   showClose = true,
 }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const { t } = useTranslation();
+
+  useFocusTrap(dialogRef, isOpen);
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -75,6 +79,7 @@ export function Modal({
           onClick={handleOverlayClick}
         >
           <motion.div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby={title ? titleId : undefined}

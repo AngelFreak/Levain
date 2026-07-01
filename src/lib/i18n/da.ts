@@ -6,6 +6,82 @@
 import type { TranslationKey } from './index';
 
 export const da: Partial<Record<TranslationKey, string>> = {
+  // ---- Fermentation engine steps ----
+  'step.bulkFermentation.name': 'Bulkhævning',
+  'step.bulkFermentation.desc':
+    'Lad dejen hæve ved {temp}°C. Lav 4 sæt stræk & fold, hvert {interval}. minut.',
+  'step.bulkFermentation.tipsCold': 'Dejen bør vokse 20-40 % før den kommer i køleskabet.',
+  'step.bulkFermentation.tipsWarm': 'Dejen bør vokse 50-75 % og vise fine bobler i siderne.',
+  'step.mixFinalDough.name': 'Bland den endelige dej',
+  'step.mixFinalDough.desc': 'Tilsæt surdej og salt til den autolyserede dej. Bland til det er samlet.',
+  'step.mixFinalDough.tips': 'Brug slap-and-fold eller Rubaud-teknik for at udvikle glutenen.',
+  'step.autolyse.name': 'Autolyse',
+  'step.autolyse.desc': 'Bland mel og vand (uden salt, uden surdej). Lad hvile tildækket.',
+  'step.autolyse.tips': 'Dette hydrerer melet og starter glutenudviklingen passivt.',
+  'step.cool.name': 'Køl af',
+  'step.cool.desc': 'Lad brødet køle helt af før du skærer i det. Krummen sætter sig stadig!',
+  'step.cool.tips':
+    'Tålmodighed betaler sig – skærer du for tidligt, slipper dampen ud og påvirker teksturen.',
+  'step.bakeRolls.name': 'Bag boller',
+  'step.bakeRolls.desc': 'Bag til de er gyldenbrune og kernetemperaturen når 88°C (190°F).',
+  'step.bakeRolls.tips': 'Vend pladen halvvejs for jævn bruning.',
+  'step.preheat.name': 'Forvarm ovnen',
+  'step.preheat.descRolls': 'Forvarm ovnen til 200°C (400°F). Sæt en bagesten eller plade ind.',
+  'step.preheat.tipsRolls': 'Damp er valgfrit til boller – det giver en mere sprød skorpe.',
+  'step.preheat.descDutch': 'Forvarm ovnen til 260°C (500°F) med støbejernsgryden inde i.',
+  'step.preheat.tipsDutch': 'En helt forvarmet støbejernsgryde er afgørende for ovenspring.',
+  'step.bakeUncovered.name': 'Bag (uden låg)',
+  'step.bakeUncovered.desc': 'Tag låget af og bag videre til dybt gyldenbrun.',
+  'step.bakeUncovered.tips': 'Kernetemperaturen bør nå 96-99°C (205-210°F).',
+  'step.scoreBake.name': 'Ridse & bag (med låg)',
+  'step.scoreBake.desc': 'Ridse dejen med et skarpt blad og bag med låg i støbejernsgryden.',
+  'step.scoreBake.tips': 'Ridse med selvtillid – et hurtigt, skråt snit giver det bedste øre.',
+  'step.shapeCold.name': 'Form (kold dej)',
+  'step.shapeCold.desc': 'Del og form den kolde dej. Kold dej er nemmere at håndtere!',
+  'step.shapeCold.tips':
+    'Arbejd hurtigt – kold dej holder bedre på formen. Boller kan gå direkte på bagepladen.',
+  'step.pullFromFridge.name': 'Tag ud af køleskabet',
+  'step.pullFromFridge.desc': 'Tag dejen ud af køleskabet. Begynd at forvarme ovnen med det samme.',
+  'step.pullFromFridge.tips': 'Kold dej bager smukt – boller behøver ikke at komme op i temperatur.',
+  'step.coldBulk.name': 'Kold bulk (natten over)',
+  'step.coldBulk.desc':
+    'Sæt BULK-dejen i køleskabet. Sov godt! (~{hours} timer). Form den om morgenen.',
+  'step.coldBulk.tips':
+    'Kold bulk udvikler smag. Form den kolde dej om morgenen – den er nemmere at håndtere!',
+  'step.coldProofOvernight.name': 'Koldhævning (natten over)',
+  'step.coldProofOvernight.desc': 'Sæt den formede dej i køleskabet. Sov godt! (~{hours} timer)',
+  'step.coldProofOvernight.tips':
+    'Koldhævning udvikler smag og gør det nemmere at ridse. Bag direkte fra køleskabet om morgenen.',
+  'step.coldProof.name': 'Koldhævning',
+  'step.coldProof.desc': 'Sæt den formede dej i køleskabet i {hours} timer.',
+  'step.coldProof.tips':
+    'Koldhævning udvikler smag og gør det nemmere at ridse. Kan forlænges op til 48 timer.',
+  'step.finalProof.name': 'Sidste hævning',
+  'step.finalProof.desc': 'Lad dejen hæve ved stuetemperatur til den består poke-testen.',
+  'step.finalProof.tips': 'Når du prikker i den, bør fordybningen langsomt springe tilbage, men ikke helt.',
+  'step.preShape.name': 'Forform',
+  'step.preShape.desc': 'Form forsigtigt dejen til en rund kugle og opbyg let spænding.',
+  'step.preShape.tips': 'Brug så lidt mel som muligt – en let klæbrig overflade hjælper med at opbygge spænding.',
+  'step.benchRest.name': 'Bænkehvile',
+  'step.benchRest.desc': 'Lad den forformede dej hvile tildækket på bordet.',
+  'step.benchRest.tips': 'Dette afslapper glutenen, så den endelige formning bliver nemmere.',
+  'step.finalShape.name': 'Endelig formning',
+  'step.finalShape.desc': 'Form dejen til den endelige facon og læg den i hævekurven.',
+  'step.finalShape.tips': 'Opbyg spænding på overfladen for godt ovenspring.',
+  'step.fold.name': 'Fold {n}',
+  'step.fold.desc': 'Udfør sæt {n} af stræk og fold.',
+  'step.fold.tips': 'Våde hænder, stræk den ene side op og over, drej 90°, gentag 4 gange.',
+  'step.feedStarter.name': 'Fodr surdej',
+  'step.feedStarter.desc': 'Fodr din surdej i forholdet {ratio}. Den er klar om ~{hours} timer.',
+  'step.feedStarter.tips': 'Brug vand ved stuetemperatur for forudsigelig timing.',
+
+  // ---- Starter readiness (fermentation.ts getStarterReadiness) ----
+  'readiness.rising': 'Hæver',
+  'readiness.almostReady': 'Næsten klar',
+  'readiness.atPeak': 'På toppen – klar!',
+  'readiness.justPastPeak': 'Lige over toppen',
+  'readiness.needsFeeding': 'Skal fodres',
+
   // ---- Common / shared ----
   'common.cancel': 'Annuller',
   'common.save': 'Gem',
@@ -24,6 +100,7 @@ export const da: Partial<Record<TranslationKey, string>> = {
   'common.search': 'Søg',
   'common.optional': 'Valgfri',
   'common.today': 'I dag',
+  'common.tomorrow': 'I morgen',
 
   // ---- Bottom navigation ----
   'nav.mainNavigation': 'Hovednavigation',

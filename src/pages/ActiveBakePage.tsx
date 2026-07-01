@@ -25,6 +25,7 @@ import { formatTime } from '../lib/fermentation';
 import type { ActiveTimeline, TimelineStep, Rating } from '../types';
 import { formatDistanceToNow } from 'date-fns';
 import { useTranslation } from '../lib/i18n/useTranslation';
+import { localizeTimelineStep } from '../lib/i18n/scheduleStep';
 
 interface ActiveBakePageProps {
   /** Open a specific timeline; falls back to the soonest active one. */
@@ -34,7 +35,7 @@ interface ActiveBakePageProps {
 export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
   const { goBackFromPage, showToast } = useAppStore();
   const { settings } = useSettingsStore();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const [expandedStep, setExpandedStep] = useState<string | null>(null);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [rating, setRating] = useState<Rating>(4);
@@ -310,8 +311,8 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
                 {t('activeBake.currentStep')}
               </span>
             </div>
-            <h2 className="text-lg font-semibold mb-1">{currentStep.name}</h2>
-            <p className="text-sm opacity-90 mb-4 whitespace-pre-line">{currentStep.description}</p>
+            <h2 className="text-lg font-semibold mb-1">{localizeTimelineStep(currentStep, language).name}</h2>
+            <p className="text-sm opacity-90 mb-4 whitespace-pre-line">{localizeTimelineStep(currentStep, language).description}</p>
             <div className="flex items-center justify-between">
               <span className="text-sm opacity-75">
                 {t('activeBake.scheduled', { time: formatTime(new Date(currentStep.scheduledTime), settings.timeFormat) })}
@@ -344,6 +345,7 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
             const isExpanded = expandedStep === step.id;
             const isCurrent = index === timeline.currentStepIndex;
             const isPast = step.status === 'completed' || step.status === 'skipped';
+            const localized = localizeTimelineStep(step, language);
 
             return (
               <Card
@@ -362,7 +364,7 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
                         ? 'text-crust-500 dark:text-crumb-500'
                         : 'text-crust-800 dark:text-crumb-100'
                     }`}>
-                      {step.name}
+                      {localized.name}
                     </p>
                     <p className="text-xs text-crust-500 dark:text-crumb-500">
                       {formatTime(new Date(step.scheduledTime), settings.timeFormat)} · {formatStepTime(step.scheduledTime)}
@@ -378,7 +380,7 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
                 {isExpanded && (
                   <div className="px-4 pb-4 pt-0 border-t border-crumb-100 dark:border-crust-800">
                     <p className="text-sm text-crust-600 dark:text-crumb-400 mt-3 mb-3 whitespace-pre-line">
-                      {step.description}
+                      {localized.description}
                     </p>
                     {!isPast && index >= timeline.currentStepIndex && (
                       <Button

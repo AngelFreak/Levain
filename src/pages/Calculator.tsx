@@ -30,6 +30,8 @@ import {
 } from '../lib/notifications';
 import { allocateTimelineBaseId } from '../lib/notificationIds';
 import { useTranslation } from '../lib/i18n/useTranslation';
+import { localizeScheduleStep } from '../lib/i18n/scheduleStep';
+import { formatScheduleDate } from '../lib/i18n/format';
 import type {
   ReverseCalculatorOutput,
   ScheduleStep,
@@ -534,7 +536,10 @@ function ScheduleStepRow({
   isLast: boolean;
   timeFormat: '12h' | '24h';
 }) {
+  const { t, language } = useTranslation();
+  // Priority styling matches on the canonical English name (stable), not display text.
   const isHighPriority = ['Feed Starter', 'Mix Final Dough', 'Pre-Shape', 'Score & Bake (Covered)'].includes(step.step);
+  const local = localizeScheduleStep(step, language);
 
   return (
     <div className="flex gap-3">
@@ -563,10 +568,10 @@ function ScheduleStepRow({
                   : 'text-crust-700 dark:text-crumb-300'
               }`}
             >
-              {step.step}
+              {local.name}
             </h4>
             <p className="text-xs text-crust-500 dark:text-crumb-500 mt-0.5">
-              {step.description}
+              {local.description}
             </p>
           </div>
           <div className="text-right flex-shrink-0 ml-3">
@@ -574,13 +579,13 @@ function ScheduleStepRow({
               {formatTime(step.time, timeFormat)}
             </p>
             <p className="text-xs text-crust-500 dark:text-crumb-500">
-              {formatDate(step.time)}
+              {formatScheduleDate(step.time, language, t)}
             </p>
           </div>
         </div>
-        {step.tips && (
+        {local.tips && (
           <p className="text-xs text-honey-700 dark:text-honey-400 mt-1 italic">
-            {step.tips}
+            {local.tips}
           </p>
         )}
       </div>

@@ -17,6 +17,7 @@ import {
   formatDate,
 } from '../../lib/fermentation';
 import { useTranslation } from '../../lib/i18n/useTranslation';
+import { localizeTimelineStep } from '../../lib/i18n/scheduleStep';
 import type { Recipe, ActiveTimeline, TimelineStep } from '../../types';
 
 interface PlanBakeModalProps {
@@ -57,7 +58,7 @@ const STEP_DURATIONS = {
 export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
   const { showToast, setActiveTab } = useAppStore();
   const { settings } = useSettingsStore();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Planning mode
@@ -989,7 +990,7 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
                       </span>
                     </div>
                     <p className="text-xs text-crust-500 dark:text-crumb-500 mt-1 line-clamp-2">
-                      {step.description.split('\n')[0]}
+                      {localizeTimelineStep(step, language).description.split('\n')[0]}
                     </p>
                   </div>
                 </div>

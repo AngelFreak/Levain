@@ -232,6 +232,13 @@ function generateStepId(): string {
 /**
  * Create schedule step
  */
+interface StepI18n {
+  nameKey?: string;
+  descKey?: string;
+  tipsKey?: string;
+  params?: Record<string, string | number>;
+}
+
 function createStep(
   step: string,
   time: Date,
@@ -239,7 +246,8 @@ function createStep(
   description: string,
   tips?: string,
   notifyBefore?: number,
-  photoPrompt?: string
+  photoPrompt?: string,
+  i18n?: StepI18n
 ): ScheduleStep {
   return {
     id: generateStepId(),
@@ -250,6 +258,10 @@ function createStep(
     tips,
     notifyBefore,
     photoPrompt,
+    nameKey: i18n?.nameKey,
+    descKey: i18n?.descKey,
+    tipsKey: i18n?.tipsKey,
+    i18nParams: i18n?.params,
   };
 }
 
@@ -440,7 +452,12 @@ export function calculateReverseSchedule(
       'Let cool completely before cutting. The crumb is still setting!',
       "Patience pays off - cutting too early releases steam and affects texture.",
       undefined,
-      'Take a photo of your finished bake!'
+      'Take a photo of your finished bake!',
+      {
+        nameKey: 'step.cool.name',
+        descKey: 'step.cool.desc',
+        tipsKey: 'step.cool.tips',
+      }
     )
   );
 
@@ -458,7 +475,12 @@ export function calculateReverseSchedule(
         'Bake until golden brown and internal temp reaches 190°F (88°C).',
         'Rotate tray halfway through for even browning.',
         15,
-        'Photo of your golden rolls!'
+        'Photo of your golden rolls!',
+        {
+          nameKey: 'step.bakeRolls.name',
+          descKey: 'step.bakeRolls.desc',
+          tipsKey: 'step.bakeRolls.tips',
+        }
       )
     );
 
@@ -471,7 +493,13 @@ export function calculateReverseSchedule(
         STEP_DURATIONS.preheatOven,
         'Preheat oven to 400°F (200°C). Place baking stone or sheet inside.',
         'Steam is optional for rolls - it creates a crustier finish.',
-        15
+        15,
+        undefined,
+        {
+          nameKey: 'step.preheat.name',
+          descKey: 'step.preheat.descRolls',
+          tipsKey: 'step.preheat.tipsRolls',
+        }
       )
     );
   } else {
@@ -484,7 +512,14 @@ export function calculateReverseSchedule(
         currentTime,
         STEP_DURATIONS.bakeUncovered,
         'Remove lid and continue baking until deep golden brown.',
-        'Internal temperature should reach 205-210°F (96-99°C).'
+        'Internal temperature should reach 205-210°F (96-99°C).',
+        undefined,
+        undefined,
+        {
+          nameKey: 'step.bakeUncovered.name',
+          descKey: 'step.bakeUncovered.desc',
+          tipsKey: 'step.bakeUncovered.tips',
+        }
       )
     );
 
@@ -498,7 +533,12 @@ export function calculateReverseSchedule(
         'Score the dough with a sharp blade and bake covered in Dutch oven.',
         'Score with confidence - a swift, angled cut creates the best ear.',
         15,
-        'Capture your scoring pattern!'
+        'Capture your scoring pattern!',
+        {
+          nameKey: 'step.scoreBake.name',
+          descKey: 'step.scoreBake.desc',
+          tipsKey: 'step.scoreBake.tips',
+        }
       )
     );
 
@@ -511,7 +551,13 @@ export function calculateReverseSchedule(
         STEP_DURATIONS.preheatOven,
         'Preheat oven to 500°F (260°C) with Dutch oven inside.',
         'A fully preheated Dutch oven is crucial for oven spring.',
-        15
+        15,
+        undefined,
+        {
+          nameKey: 'step.preheat.name',
+          descKey: 'step.preheat.descDutch',
+          tipsKey: 'step.preheat.tipsDutch',
+        }
       )
     );
   }
@@ -531,7 +577,12 @@ export function calculateReverseSchedule(
         'Divide and shape the cold dough. Cold dough is easier to handle!',
         'Work quickly - cold dough holds its shape better. Rolls can go straight to baking sheet.',
         undefined,
-        'Photo of shaped rolls'
+        'Photo of shaped rolls',
+        {
+          nameKey: 'step.shapeCold.name',
+          descKey: 'step.shapeCold.desc',
+          tipsKey: 'step.shapeCold.tips',
+        }
       )
     );
 
@@ -541,7 +592,14 @@ export function calculateReverseSchedule(
         new Date(currentTime.getTime()),
         5,
         'Remove dough from refrigerator. Start preheating oven immediately.',
-        'Cold dough bakes beautifully - no need to warm up for rolls.'
+        'Cold dough bakes beautifully - no need to warm up for rolls.',
+        undefined,
+        undefined,
+        {
+          nameKey: 'step.pullFromFridge.name',
+          descKey: 'step.pullFromFridge.desc',
+          tipsKey: 'step.pullFromFridge.tips',
+        }
       )
     );
   }
@@ -582,6 +640,22 @@ export function calculateReverseSchedule(
 
     const photoPrompt = shapeInMorning ? 'Photo of bulk dough before fridge' : 'Photo of shaped dough before fridge';
 
+    const nameKey = shapeInMorning
+      ? 'step.coldBulk.name'
+      : isOvernight
+      ? 'step.coldProofOvernight.name'
+      : 'step.coldProof.name';
+    const descKey = shapeInMorning
+      ? 'step.coldBulk.desc'
+      : isOvernight
+      ? 'step.coldProofOvernight.desc'
+      : 'step.coldProof.desc';
+    const tipsKey = shapeInMorning
+      ? 'step.coldBulk.tips'
+      : isOvernight
+      ? 'step.coldProofOvernight.tips'
+      : 'step.coldProof.tips';
+
     schedule.unshift(
       createStep(
         stepName,
@@ -590,7 +664,13 @@ export function calculateReverseSchedule(
         description,
         tips,
         undefined,
-        photoPrompt
+        photoPrompt,
+        {
+          nameKey,
+          descKey,
+          tipsKey,
+          params: { hours: coldProofHours },
+        }
       )
     );
   } else {
@@ -602,7 +682,13 @@ export function calculateReverseSchedule(
         STEP_DURATIONS.proofWarm,
         'Let dough proof at room temperature until it passes the poke test.',
         'When you poke it, the indentation should slowly spring back but not fully.',
-        15
+        15,
+        undefined,
+        {
+          nameKey: 'step.finalProof.name',
+          descKey: 'step.finalProof.desc',
+          tipsKey: 'step.finalProof.tips',
+        }
       )
     );
   }
@@ -625,7 +711,14 @@ export function calculateReverseSchedule(
         preshapeTime,
         STEP_DURATIONS.preshape,
         'Gently shape the dough into a round, building light tension.',
-        'Use minimal flour - a slightly tacky surface helps build tension.'
+        'Use minimal flour - a slightly tacky surface helps build tension.',
+        undefined,
+        undefined,
+        {
+          nameKey: 'step.preShape.name',
+          descKey: 'step.preShape.desc',
+          tipsKey: 'step.preShape.tips',
+        }
       )
     );
 
@@ -637,7 +730,14 @@ export function calculateReverseSchedule(
         benchRestTime,
         STEP_DURATIONS.benchRest,
         'Let pre-shaped dough rest, covered, on the counter.',
-        'This relaxes the gluten for easier final shaping.'
+        'This relaxes the gluten for easier final shaping.',
+        undefined,
+        undefined,
+        {
+          nameKey: 'step.benchRest.name',
+          descKey: 'step.benchRest.desc',
+          tipsKey: 'step.benchRest.tips',
+        }
       )
     );
 
@@ -651,7 +751,12 @@ export function calculateReverseSchedule(
         'Shape the dough into final form and place in proofing basket.',
         'Create tension on the surface for good oven spring.',
         undefined,
-        'Photo of your shaped dough'
+        'Photo of your shaped dough',
+        {
+          nameKey: 'step.finalShape.name',
+          descKey: 'step.finalShape.desc',
+          tipsKey: 'step.finalShape.tips',
+        }
       )
     );
 
@@ -668,7 +773,12 @@ export function calculateReverseSchedule(
         'Shape the dough into final form and place in proofing basket.',
         'Create tension on the surface for good oven spring.',
         undefined,
-        'Photo of your shaped dough'
+        'Photo of your shaped dough',
+        {
+          nameKey: 'step.finalShape.name',
+          descKey: 'step.finalShape.desc',
+          tipsKey: 'step.finalShape.tips',
+        }
       )
     );
 
@@ -679,7 +789,14 @@ export function calculateReverseSchedule(
         currentTime,
         STEP_DURATIONS.benchRest,
         'Let pre-shaped dough rest, covered, on the counter.',
-        'This relaxes the gluten for easier final shaping.'
+        'This relaxes the gluten for easier final shaping.',
+        undefined,
+        undefined,
+        {
+          nameKey: 'step.benchRest.name',
+          descKey: 'step.benchRest.desc',
+          tipsKey: 'step.benchRest.tips',
+        }
       )
     );
 
@@ -690,7 +807,14 @@ export function calculateReverseSchedule(
         currentTime,
         STEP_DURATIONS.preshape,
         'Gently shape the dough into a round, building light tension.',
-        'Use minimal flour - a slightly tacky surface helps build tension.'
+        'Use minimal flour - a slightly tacky surface helps build tension.',
+        undefined,
+        undefined,
+        {
+          nameKey: 'step.preShape.name',
+          descKey: 'step.preShape.desc',
+          tipsKey: 'step.preShape.tips',
+        }
       )
     );
   }
@@ -714,7 +838,15 @@ export function calculateReverseSchedule(
         ? 'Dough should increase by 20-40% before going in the fridge.'
         : 'Dough should increase by 50-75% and show good bubbles on sides.',
       undefined,
-      'Photo at start and after last fold'
+      'Photo at start and after last fold',
+      {
+        nameKey: 'step.bulkFermentation.name',
+        descKey: 'step.bulkFermentation.desc',
+        tipsKey: input.includeColdRetard
+          ? 'step.bulkFermentation.tipsCold'
+          : 'step.bulkFermentation.tipsWarm',
+        params: { temp: input.ambientTemperature, interval: foldInterval },
+      }
     )
   );
 
@@ -733,7 +865,14 @@ export function calculateReverseSchedule(
           i === 1
             ? 'Wet hands, stretch one side up and over, rotate 90°, repeat 4x.'
             : undefined,
-          5
+          5,
+          undefined,
+          {
+            nameKey: 'step.fold.name',
+            descKey: 'step.fold.desc',
+            tipsKey: i === 1 ? 'step.fold.tips' : undefined,
+            params: { n: i },
+          }
         )
       );
     }
@@ -747,7 +886,14 @@ export function calculateReverseSchedule(
       currentTime,
       STEP_DURATIONS.mixDough,
       'Add levain and salt to autolysed dough. Mix until incorporated.',
-      'Use slap and fold or Rubaud mixing to develop gluten.'
+      'Use slap and fold or Rubaud mixing to develop gluten.',
+      undefined,
+      undefined,
+      {
+        nameKey: 'step.mixFinalDough.name',
+        descKey: 'step.mixFinalDough.desc',
+        tipsKey: 'step.mixFinalDough.tips',
+      }
     )
   );
 
@@ -760,7 +906,14 @@ export function calculateReverseSchedule(
         currentTime,
         STEP_DURATIONS.autolyse,
         'Mix flour and water (no salt, no levain). Let rest covered.',
-        'This hydrates the flour and begins gluten development passively.'
+        'This hydrates the flour and begins gluten development passively.',
+        undefined,
+        undefined,
+        {
+          nameKey: 'step.autolyse.name',
+          descKey: 'step.autolyse.desc',
+          tipsKey: 'step.autolyse.tips',
+        }
       )
     );
   }
@@ -775,7 +928,13 @@ export function calculateReverseSchedule(
       `Feed your starter at ${recommendedStarterRatio} ratio. It will be ready in ~${starterPrepTime} hours.`,
       'Use room temperature water for predictable timing.',
       undefined,
-      'Photo of fed starter'
+      'Photo of fed starter',
+      {
+        nameKey: 'step.feedStarter.name',
+        descKey: 'step.feedStarter.desc',
+        tipsKey: 'step.feedStarter.tips',
+        params: { ratio: recommendedStarterRatio, hours: starterPrepTime },
+      }
     )
   );
 
@@ -943,14 +1102,15 @@ export function formatDate(date: Date): string {
 }
 
 /**
- * Get starter readiness description based on hours since fed
+ * Get starter readiness as a stable translation key based on hours since fed.
+ * Returns a `readiness.*` key; translate at the display layer via `t(...)`.
  */
 export function getStarterReadiness(hoursSinceFed: number, peakTime: number): string {
   const ratio = hoursSinceFed / peakTime;
 
-  if (ratio < 0.5) return 'Rising';
-  if (ratio < 0.8) return 'Almost ready';
-  if (ratio < 1.2) return 'At peak - ready!';
-  if (ratio < 1.5) return 'Just past peak';
-  return 'Needs feeding';
+  if (ratio < 0.5) return 'readiness.rising';
+  if (ratio < 0.8) return 'readiness.almostReady';
+  if (ratio < 1.2) return 'readiness.atPeak';
+  if (ratio < 1.5) return 'readiness.justPastPeak';
+  return 'readiness.needsFeeding';
 }

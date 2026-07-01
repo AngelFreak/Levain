@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { motion, AnimatePresence, useDragControls, type PanInfo } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { useTranslation } from '../../lib/i18n/useTranslation';
+import { useFocusTrap } from '../../lib/useFocusTrap';
 
 interface BottomSheetProps {
   isOpen: boolean;
@@ -25,6 +26,8 @@ export function BottomSheet({
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragControls = useDragControls();
   const titleId = useId();
+
+  useFocusTrap(sheetRef, isOpen);
 
   // Lock body scroll when open
   useEffect(() => {

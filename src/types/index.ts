@@ -354,6 +354,12 @@ export interface TimelineStep {
   notes?: string;
   photos?: string[];
   photoPrompt?: string;
+  tips?: string;
+  // i18n metadata (see ScheduleStep); English name/description remain canonical.
+  nameKey?: string;
+  descKey?: string;
+  tipsKey?: string;
+  i18nParams?: Record<string, string | number>;
 }
 
 export type StepStatus = 'pending' | 'active' | 'completed' | 'skipped';
@@ -418,6 +424,18 @@ export interface ScheduleStep {
   tips?: string;
   notifyBefore?: number;
   photoPrompt?: string;
+  /**
+   * i18n metadata for localizing this engine-generated step at display time.
+   * The English `step`/`description`/`tips` above remain the canonical values
+   * (persisted, and used for string-matching in the planner), so these are
+   * purely additive: the UI translates via these keys when present and falls
+   * back to the English fields otherwise. `params` holds interpolation values
+   * (temps, counts, intervals) referenced by the keyed templates.
+   */
+  nameKey?: string;
+  descKey?: string;
+  tipsKey?: string;
+  i18nParams?: Record<string, string | number>;
 }
 
 export interface AlternativeSchedule {
