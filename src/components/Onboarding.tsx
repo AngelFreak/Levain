@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Wheat,
   Beaker,
   Thermometer,
   Bell,
@@ -207,9 +206,11 @@ function WelcomeStep({ onStart, onImport }: { onStart: () => void; onImport: () 
   const { t } = useTranslation();
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center">
-      <div className="p-5 bg-honey-100 dark:bg-honey-900/30 rounded-3xl mb-6">
-        <Wheat className="w-14 h-14 text-honey-600 dark:text-honey-400" />
-      </div>
+      <img
+        src="/logo.png"
+        alt="Levain"
+        className="w-24 h-24 mb-6 drop-shadow-md"
+      />
       <h1 className="text-3xl font-display font-bold text-crust-800 dark:text-crumb-100">
         {t('onboarding.welcome.title')}
       </h1>
