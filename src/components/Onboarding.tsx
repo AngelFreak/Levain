@@ -125,8 +125,9 @@ export function Onboarding({ isOpen, onClose, onImport }: OnboardingProps) {
       aria-modal="true"
       aria-label={t('onboarding.welcome.title')}
     >
-      {/* Progress dots */}
-      <div className="flex-shrink-0 pt-safe px-6 pt-6">
+      {/* Progress dots — sit just below the status bar / notch (safe inset only,
+          no extra top padding, so the welcome content rides higher). */}
+      <div className="flex-shrink-0 px-6 pt-safe pb-2">
         <div className="flex items-center justify-center gap-2" aria-hidden="true">
           {STEP_ORDER.map((s, i) => (
             <div
@@ -144,7 +145,7 @@ export function Onboarding({ isOpen, onClose, onImport }: OnboardingProps) {
       </div>
 
       {/* Step body */}
-      <div className="flex-1 overflow-y-auto px-6 py-8">
+      <div className="flex-1 overflow-y-auto px-6 pt-2 pb-8">
         <AnimatePresence mode="wait">
           <motion.div
             key={step}
@@ -205,7 +206,7 @@ export function Onboarding({ isOpen, onClose, onImport }: OnboardingProps) {
 function WelcomeStep({ onStart, onImport }: { onStart: () => void; onImport: () => void }) {
   const { t } = useTranslation();
   return (
-    <div className="flex-1 flex flex-col items-center justify-center text-center">
+    <div className="flex flex-col items-center justify-start text-center pt-4">
       <img
         src="/logo.png"
         alt="Levain"
