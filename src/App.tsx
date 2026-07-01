@@ -7,6 +7,7 @@ import { PermissionPrompt } from './components/PermissionPrompt';
 import { Onboarding } from './components/Onboarding';
 import { useAppStore } from './stores/appStore';
 import { useSettingsStore } from './stores/settingsStore';
+import { useTranslation } from './lib/i18n/useTranslation';
 import { hasShownPermissionPrompt, hasCompletedOnboarding } from './lib/permissions';
 import { initializeNotifications, migrateNotificationScheme, rescheduleFeedingReminder } from './lib/notifications';
 import { DEFAULT_RECIPES } from './data/defaultRecipes';
@@ -37,6 +38,7 @@ const pages = {
 function App() {
   const { activeTab, activePage, pageData, activeModal, modalData, closeModal, toast, hideToast, isOffline, goBack, setActiveTab } = useAppStore();
   const { settings } = useSettingsStore();
+  const { t } = useTranslation();
   const [showPermissionPrompt, setShowPermissionPrompt] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [planBakeRecipe, setPlanBakeRecipe] = useState<import('./types').Recipe | null>(null);
@@ -219,7 +221,7 @@ function App() {
         href="#main-content"
         className="skip-to-content"
       >
-        Skip to main content
+        {t('system.skipToContent')}
       </a>
 
       {/* Offline Banner */}
@@ -231,7 +233,7 @@ function App() {
             exit={{ height: 0, opacity: 0 }}
             className="flex-shrink-0 bg-warning-500 text-white text-center text-sm py-2 px-4 overflow-hidden"
           >
-            You're offline. Your data is saved on this device.
+            {t('system.offline')}
           </motion.div>
         )}
       </AnimatePresence>

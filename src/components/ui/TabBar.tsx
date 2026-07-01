@@ -10,23 +10,26 @@ import { useAppStore, type TabName } from '../../stores/appStore';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { springs } from '../../lib/motion';
+import { useTranslation } from '../../lib/i18n/useTranslation';
+import type { TranslationKey } from '../../lib/i18n';
 
 interface TabItem {
   id: TabName;
-  label: string;
+  labelKey: TranslationKey;
   icon: LucideIcon;
 }
 
 const tabs: TabItem[] = [
-  { id: 'home', label: 'Home', icon: Home },
-  { id: 'calculator', label: 'Calculate', icon: Calculator },
-  { id: 'starters', label: 'Starters', icon: Beaker },
-  { id: 'book', label: 'Book', icon: BookOpen },
+  { id: 'home', labelKey: 'nav.home', icon: Home },
+  { id: 'calculator', labelKey: 'nav.calculate', icon: Calculator },
+  { id: 'starters', labelKey: 'nav.starters', icon: Beaker },
+  { id: 'book', labelKey: 'nav.book', icon: BookOpen },
 ];
 
 export function TabBar() {
   const { activeTab, setActiveTab, hasActiveBake } = useAppStore();
   const hapticEnabled = useSettingsStore((s) => s.settings.hapticFeedbackEnabled);
+  const { t } = useTranslation();
 
   const handleTabPress = async (tabId: TabName) => {
     if (tabId === activeTab) return;
@@ -52,13 +55,14 @@ export function TabBar() {
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           const Icon = tab.icon;
+          const label = t(tab.labelKey);
 
           return (
             <button
               key={tab.id}
               onClick={() => handleTabPress(tab.id)}
               className="relative flex flex-col items-center justify-center py-2 px-3 min-w-[64px] touch-target rounded-2xl transition-colors"
-              aria-label={tab.label}
+              aria-label={label}
               aria-current={isActive ? 'page' : undefined}
             >
               {/* MD3 Pill indicator background - more visible */}
@@ -102,7 +106,7 @@ export function TabBar() {
                       : 'text-crust-500 dark:text-crumb-600'
                   }`}
                 >
-                  {tab.label}
+                  {label}
                 </span>
               </div>
             </button>

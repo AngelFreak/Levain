@@ -46,6 +46,7 @@ import { stageBadgeVariant } from '../lib/starterStages';
 import { differenceInDays } from 'date-fns';
 import type { Starter, Feeding } from '../types';
 import { formatDistanceToNow, format } from 'date-fns';
+import { useTranslation } from '../lib/i18n/useTranslation';
 
 interface StarterDetailPageProps {
   starterId: string;
@@ -54,6 +55,7 @@ interface StarterDetailPageProps {
 export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
   const { goBackFromPage, openModal, showToast, openBookAtCategory } = useAppStore();
   const { settings } = useSettingsStore();
+  const { t } = useTranslation();
   const hasClaudeKey = Boolean(settings.claudeApiKey?.trim());
   const [starter, setStarter] = useState<Starter | null>(null);
   const [feedings, setFeedings] = useState<Feeding[]>([]);
@@ -97,13 +99,13 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
   const handleMarkPeak = async () => {
     const latestUnpeaked = feedings.find((f) => !f.peakTime);
     if (!latestUnpeaked?.id) {
-      showToast('No recent feeding to mark — log a feeding first.', 'info');
+      showToast(t('starterDetail.toastNoFeedingToMark'), 'info');
       return;
     }
     const hours =
       (Date.now() - new Date(latestUnpeaked.timestamp).getTime()) / (1000 * 60 * 60);
     if (hours < 0.25) {
-      showToast('That feeding was just logged — mark the peak when it rises.', 'info');
+      showToast(t('starterDetail.toastFeedingJustLogged'), 'info');
       return;
     }
     try {
@@ -117,10 +119,10 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
       if (starterData) setStarter(starterData);
       feedingsData.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       setFeedings(feedingsData);
-      showToast(`Peak recorded at ~${Math.round(hours)}h.`, 'success');
+      showToast(t('starterDetail.toastPeakRecorded', { hours: Math.round(hours) }), 'success');
     } catch (error) {
       console.error('Failed to mark peak:', error);
-      showToast('Could not record peak', 'error');
+      showToast(t('starterDetail.toastPeakFailed'), 'error');
     }
   };
 
@@ -135,10 +137,10 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
       await db.feedings.where('starterId').equals(starterId).delete();
       // Delete the starter
       await db.starters.delete(starter.id);
-      showToast(`${starter.name} has been deleted`, 'success');
+      showToast(t('starterDetail.toastDeleted', { name: starter.name }), 'success');
       goBackFromPage();
     } catch (error) {
-      showToast('Failed to delete starter', 'error');
+      showToast(t('starterDetail.toastDeleteFailed'), 'error');
     }
   };
 
@@ -168,18 +170,23 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
       }
 
       const meta = getStorageLocationMeta(location);
+      const place = meta.label.toLowerCase();
       if (scheduledTime) {
-        const when =
+        showToast(
           location === 'fridge'
-            ? `next feeding reminder in ~${FRIDGE_FEEDING_INTERVAL_DAYS} days`
-            : `feeding reminder updated`;
-        showToast(`Moved to ${meta.label.toLowerCase()} — ${when}.`, 'success');
+            ? t('starterDetail.toastMovedFridge', {
+                place,
+                days: FRIDGE_FEEDING_INTERVAL_DAYS,
+              })
+            : t('starterDetail.toastMovedRoom', { place }),
+          'success'
+        );
       } else {
-        showToast(`Moved to ${meta.label.toLowerCase()}.`, 'success');
+        showToast(t('starterDetail.toastMoved', { place }), 'success');
       }
     } catch (error) {
       console.error('Failed to change storage location:', error);
-      showToast('Failed to update storage location', 'error');
+      showToast(t('starterDetail.toastMoveFailed'), 'error');
     }
   };
 
@@ -187,7 +194,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
     if (!starter) return;
     await resetStarterDiscard(starter.uuid);
     setStarter({ ...starter, discardGrams: 0 });
-    showToast('Discard cleared. Nice — nothing wasted!', 'success');
+    showToast(t('starterDetail.toastDiscardCleared'), 'success');
   };
 
   const handleAnalyze = async (source: 'camera' | 'gallery', method: 'local' | 'claude') => {
@@ -204,7 +211,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
 
       const base64 = await photoToBase64(photo);
       if (!base64) {
-        showToast('Could not read that photo. Please try again.', 'error');
+        showToast(t('starterDetail.toastPhotoUnreadable'), 'error');
         return;
       }
 
@@ -228,7 +235,9 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
       await db.starters.update(starter.id, { healthScore, lastAnalysis: analysis });
       setStarter({ ...starter, healthScore, lastAnalysis: analysis });
       showToast(
-        method === 'claude' ? 'Analyzed with Claude!' : 'Quick estimate ready!',
+        method === 'claude'
+          ? t('starterDetail.toastAnalyzedClaude')
+          : t('starterDetail.toastAnalyzedLocal'),
         'success'
       );
     } catch (error) {
@@ -239,7 +248,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
         const message =
           error instanceof Error && error.message
             ? error.message
-            : 'Analysis failed. Please try again.';
+            : t('starterDetail.toastAnalysisFailed');
         showToast(message, 'error');
       }
     } finally {
@@ -255,12 +264,12 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
   };
 
   const getFeedingStatus = (lastFed?: Date) => {
-    if (!lastFed) return { color: 'text-crust-500', label: 'Never fed' };
+    if (!lastFed) return { color: 'text-crust-500', label: t('starterDetail.statusNeverFed') };
     const hoursSinceFed = (Date.now() - new Date(lastFed).getTime()) / (1000 * 60 * 60);
-    if (hoursSinceFed < 8) return { color: 'text-success-600', label: 'Recently fed' };
-    if (hoursSinceFed < 24) return { color: 'text-honey-600', label: 'Ready to use' };
-    if (hoursSinceFed < 48) return { color: 'text-warning-600', label: 'Needs feeding' };
-    return { color: 'text-error-600', label: 'Feed urgently!' };
+    if (hoursSinceFed < 8) return { color: 'text-success-600', label: t('starterDetail.statusRecentlyFed') };
+    if (hoursSinceFed < 24) return { color: 'text-honey-600', label: t('starterDetail.statusReadyToUse') };
+    if (hoursSinceFed < 48) return { color: 'text-warning-600', label: t('starterDetail.statusNeedsFeeding') };
+    return { color: 'text-error-600', label: t('starterDetail.statusFeedUrgently') };
   };
 
   if (isLoading) {
@@ -280,10 +289,10 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
           className="flex items-center gap-2 text-crust-600 dark:text-crumb-400 mb-6"
         >
           <ArrowLeft className="w-5 h-5" />
-          Back
+          {t('common.back')}
         </button>
         <Card padding="lg" className="text-center">
-          <p className="text-crust-600 dark:text-crumb-400">Starter not found</p>
+          <p className="text-crust-600 dark:text-crumb-400">{t('starterDetail.notFound')}</p>
         </Card>
       </div>
     );
@@ -305,26 +314,26 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
           className="flex items-center gap-2 text-crust-600 dark:text-crumb-400"
         >
           <ArrowLeft className="w-5 h-5" />
-          Back
+          {t('common.back')}
         </button>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowHelp(true)}
-            aria-label="How analysis works"
+            aria-label={t('starterDetail.helpAriaLabel')}
             className="p-2 rounded-full hover:bg-crumb-100 dark:hover:bg-crust-800"
           >
             <HelpCircle className="w-5 h-5 text-crust-600 dark:text-crumb-400" />
           </button>
           <button
             onClick={() => setShowEditModal(true)}
-            aria-label="Edit starter"
+            aria-label={t('starterDetail.editAriaLabel')}
             className="p-2 rounded-full hover:bg-crumb-100 dark:hover:bg-crust-800"
           >
             <Edit2 className="w-5 h-5 text-crust-600 dark:text-crumb-400" />
           </button>
           <button
             onClick={() => setShowDeleteConfirm(true)}
-            aria-label="Delete starter"
+            aria-label={t('starterDetail.deleteAriaLabel')}
             className="p-2 rounded-full hover:bg-error-50 dark:hover:bg-error-950/20"
           >
             <Trash2 className="w-5 h-5 text-error-500" />
@@ -360,18 +369,18 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
                 </h1>
                 {!starter.isActive && (
                   <span className="px-2 py-0.5 text-xs bg-crumb-200 dark:bg-crust-700 text-crust-600 dark:text-crumb-400 rounded-full">
-                    Inactive
+                    {t('starterDetail.inactive')}
                   </span>
                 )}
                 {getStorageLocation(starter.storageLocation) === 'fridge' ? (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
                     <Snowflake className="w-3 h-3" />
-                    Fridge
+                    {t('starterDetail.fridge')}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-honey-100 dark:bg-honey-900/30 text-honey-700 dark:text-honey-400 rounded-full">
                     <Home className="w-3 h-3" />
-                    Room
+                    {t('starterDetail.room')}
                   </span>
                 )}
               </div>
@@ -379,9 +388,9 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
               <div className="flex items-center gap-4 mt-2 text-sm text-crust-600 dark:text-crumb-400">
                 <span className="flex items-center gap-1">
                   <Droplets className="w-4 h-4" />
-                  {starter.hydration}% hydration
+                  {t('starterDetail.hydrationLabel', { value: starter.hydration })}
                 </span>
-                <span>{starter.flourType} flour</span>
+                <span>{t('starterDetail.flourLabel', { flour: starter.flourType })}</span>
               </div>
 
               <div className="flex items-center gap-2 mt-3">
@@ -390,7 +399,9 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
                 </span>
                 {starter.lastFed && (
                   <span className="text-sm text-crust-500 dark:text-crumb-500">
-                    (fed {formatDistanceToNow(new Date(starter.lastFed))} ago)
+                    {t('starterDetail.fedAgo', {
+                      ago: formatDistanceToNow(new Date(starter.lastFed)),
+                    })}
                   </span>
                 )}
               </div>
@@ -406,7 +417,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
                 {starter.healthScore ?? '--'}
               </div>
               <div className="text-xs text-crust-500 dark:text-crumb-500">
-                Health Score
+                {t('starterDetail.healthScore')}
               </div>
             </div>
             <div className="text-center">
@@ -414,7 +425,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
                 {starter.averagePeakTime != null ? `${starter.averagePeakTime}h` : '--'}
               </div>
               <div className="text-xs text-crust-500 dark:text-crumb-500">
-                Avg Peak
+                {t('starterDetail.avgPeak')}
               </div>
             </div>
             <div className="text-center">
@@ -422,21 +433,31 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
                 {starter.feedingStats?.activityScore ?? '--'}
               </div>
               <div className="text-xs text-crust-500 dark:text-crumb-500">
-                Activity
+                {t('starterDetail.activity')}
               </div>
             </div>
           </div>
 
           {/* Feeding cadence caption */}
           <div className="mt-2 text-center text-xs text-crust-500 dark:text-crumb-500">
-            {feedings.length} feeding{feedings.length === 1 ? '' : 's'}
+            {feedings.length === 1
+              ? t('starterDetail.feedingCountOne', { count: feedings.length })
+              : t('starterDetail.feedingCountOther', { count: feedings.length })}
             {starter.feedingStats?.medianIntervalDays != null && (
-              <> · ~{starter.feedingStats.medianIntervalDays}d between feeds</>
+              <>
+                {' · '}
+                {t('starterDetail.medianInterval', {
+                  days: starter.feedingStats.medianIntervalDays,
+                })}
+              </>
             )}
             {starter.feedingStats != null &&
               starter.feedingStats.peakSampleCount === 0 &&
               feedings.length > 0 && (
-                <> · tap “Mark peak” when it rises to learn its timing</>
+                <>
+                  {' · '}
+                  {t('starterDetail.markPeakHint')}
+                </>
               )}
           </div>
 
@@ -447,7 +468,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
               onClick={() => openModal('feed-starter', { starterId: starter.uuid })}
             >
               <Droplets className="w-4 h-4" />
-              Feed Now
+              {t('starterDetail.feedNow')}
             </Button>
             <Button
               variant="ghost"
@@ -456,7 +477,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
               onClick={() => setShowPhotoSheet(true)}
             >
               <Sparkles className="w-4 h-4" />
-              {isAnalyzing ? 'Analyzing…' : 'Analyze'}
+              {isAnalyzing ? t('starterDetail.analyzing') : t('starterDetail.analyze')}
             </Button>
           </div>
           {/* Mark peak — captures time-to-peak for the latest feeding */}
@@ -468,7 +489,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
               className="mt-2"
             >
               <TrendingUp className="w-4 h-4" />
-              Mark peak now
+              {t('starterDetail.markPeakNow')}
             </Button>
           )}
           {/* Plan a feed — recommend when/what ratio to feed for a target peak */}
@@ -479,7 +500,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
             className="mt-2"
           >
             <Calendar className="w-4 h-4" />
-            Plan a feed
+            {t('starterDetail.planAFeed')}
           </Button>
         </Card>
       </motion.div>
@@ -494,7 +515,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
         <Card padding="md">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <p className="font-medium text-crust-800 dark:text-crumb-100">Storage</p>
+              <p className="font-medium text-crust-800 dark:text-crumb-100">{t('starterDetail.storage')}</p>
               <p className="text-xs text-crust-500 dark:text-crumb-500 mt-0.5">
                 {getStorageLocationMeta(starter.storageLocation).description}
               </p>
@@ -512,7 +533,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
               }`}
             >
               <Home className="w-4 h-4" />
-              Room
+              {t('starterDetail.room')}
             </button>
             <button
               type="button"
@@ -525,7 +546,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
               }`}
             >
               <Snowflake className="w-4 h-4" />
-              Fridge
+              {t('starterDetail.fridge')}
             </button>
           </div>
         </Card>
@@ -551,12 +572,12 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
               <Recycle className="w-5 h-5 text-honey-600 dark:text-honey-400 flex-shrink-0" />
               <div className="flex-1">
                 <p className="font-medium text-crust-800 dark:text-crumb-100">
-                  ~{starter.discardGrams} g discard saved up
+                  {t('starterDetail.discardSavedUp', { grams: starter.discardGrams ?? 0 })}
                 </p>
                 <p className="text-xs text-crust-500 dark:text-crumb-500 mt-0.5">
                   {(starter.discardGrams ?? 0) >= 100
-                    ? 'Enough to bake something — turn it into crackers, pancakes, or a loaf.'
-                    : 'Accumulating from your feedings.'}
+                    ? t('starterDetail.discardEnough')
+                    : t('starterDetail.discardAccumulating')}
                 </p>
               </div>
             </div>
@@ -568,10 +589,10 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
                   onClick={() => openBookAtCategory('discard')}
                 >
                   <Recycle className="w-4 h-4" />
-                  Discard recipes
+                  {t('starterDetail.discardRecipes')}
                 </Button>
                 <Button variant="ghost" size="sm" fullWidth onClick={handleUsedDiscard}>
-                  Used it
+                  {t('starterDetail.usedIt')}
                 </Button>
               </div>
             )}
@@ -580,7 +601,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
                 onClick={handleUsedDiscard}
                 className="text-xs text-crust-500 dark:text-crumb-500 mt-2 underline"
               >
-                Mark used
+                {t('starterDetail.markUsed')}
               </button>
             )}
           </Card>
@@ -600,11 +621,11 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
               <div className="flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-honey-500" />
                 <p className="font-medium text-crust-800 dark:text-crumb-100">
-                  Time to peak
+                  {t('starterDetail.timeToPeak')}
                 </p>
               </div>
               <p className="text-xs text-crust-500 dark:text-crumb-500">
-                last {peakHistory.length} peaks
+                {t('starterDetail.lastNPeaks', { count: peakHistory.length })}
               </p>
             </div>
             <div className="h-24">
@@ -612,7 +633,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
                 <LineChart data={peakHistory} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
                   <YAxis hide domain={['dataMin - 1', 'dataMax + 1']} />
                   <Tooltip
-                    formatter={(v) => [`${v}h`, 'Peak']}
+                    formatter={(v) => [`${v}h`, t('starterDetail.peakTooltip')]}
                     labelFormatter={() => ''}
                     contentStyle={{ fontSize: 12, borderRadius: 8 }}
                   />
@@ -627,7 +648,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
               </ResponsiveContainer>
             </div>
             <p className="text-xs text-center text-crust-500 dark:text-crumb-500 mt-1">
-              Normalized to {settings.defaultAmbientTemp}°C · lower is faster
+              {t('starterDetail.normalizedCaption', { temp: settings.defaultAmbientTemp })}
             </p>
           </Card>
         </motion.div>
@@ -643,14 +664,16 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
         <Card padding="md" className="flex items-center gap-3">
           <Calendar className="w-5 h-5 text-honey-500" />
           <div>
-            <p className="text-sm text-crust-600 dark:text-crumb-400">Birthday</p>
+            <p className="text-sm text-crust-600 dark:text-crumb-400">{t('starterDetail.birthday')}</p>
             <p className="font-medium text-crust-800 dark:text-crumb-100">
               {format(new Date(starter.createdDate), 'MMMM d, yyyy')}
             </p>
           </div>
           <div className="ml-auto text-right">
             <p className="text-sm text-crust-500 dark:text-crumb-500">
-              {formatDistanceToNow(new Date(starter.createdDate))} old
+              {t('starterDetail.ageOld', {
+                age: formatDistanceToNow(new Date(starter.createdDate)),
+              })}
             </p>
           </div>
         </Card>
@@ -668,7 +691,9 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium text-crust-600 dark:text-crumb-400 flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-honey-500" />
-                {starter.lastAnalysis.source === 'claude' ? 'Claude Analysis' : 'Quick Estimate'}
+                {starter.lastAnalysis.source === 'claude'
+                  ? t('starterDetail.claudeAnalysis')
+                  : t('starterDetail.quickEstimate')}
               </h3>
               {starter.lastAnalysis.stage && starter.lastAnalysis.stageLabel ? (
                 <Badge variant={stageBadgeVariant(starter.lastAnalysis.stage)}>
@@ -678,10 +703,10 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
               ) : starter.lastAnalysis.readyToBake ? (
                 <Badge variant="success">
                   <CheckCircle2 className="w-3 h-3" />
-                  Ready to bake
+                  {t('starterDetail.readyToBake')}
                 </Badge>
               ) : (
-                <Badge variant="warning">Not ready yet</Badge>
+                <Badge variant="warning">{t('starterDetail.notReadyYet')}</Badge>
               )}
             </div>
 
@@ -719,13 +744,17 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
 
             <p className="text-xs text-crust-500 dark:text-crumb-500 mt-3">
               {starter.lastAnalysis.source === 'on-device'
-                ? 'On-device estimate'
-                : `${starter.lastAnalysis.confidence} confidence`}{' '}
-              · analyzed {formatDistanceToNow(new Date(starter.lastAnalysis.timestamp))} ago
+                ? t('starterDetail.onDeviceEstimate')
+                : t('starterDetail.confidenceLabel', {
+                    confidence: starter.lastAnalysis.confidence,
+                  })}{' '}
+              {t('starterDetail.analyzedAgo', {
+                ago: formatDistanceToNow(new Date(starter.lastAnalysis.timestamp)),
+              })}
             </p>
             {starter.lastAnalysis.source === 'on-device' && !hasClaudeKey && (
               <p className="text-xs text-crust-400 dark:text-crumb-600 mt-1">
-                Add a Claude API key in Settings for richer, photo-based advice.
+                {t('starterDetail.addKeyForRicherAdvice')}
               </p>
             )}
           </Card>
@@ -742,7 +771,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
         >
           <Card padding="md">
             <h3 className="text-sm font-medium text-crust-600 dark:text-crumb-400 mb-2">
-              Notes
+              {t('starterDetail.notes')}
             </h3>
             <p className="text-crust-800 dark:text-crumb-100">{starter.notes}</p>
           </Card>
@@ -757,7 +786,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
       >
         <h2 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-4 flex items-center gap-2">
           <TrendingUp className="w-5 h-5 text-honey-500" />
-          Feeding History
+          {t('starterDetail.feedingHistory')}
         </h2>
 
         {feedings.length > 0 ? (
@@ -776,8 +805,11 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
                         {feeding.ratio}
                       </p>
                       <p className="text-sm text-crust-500 dark:text-crumb-500 mt-0.5">
-                        {feeding.starterWeight}g starter + {feeding.flourWeight}g flour +{' '}
-                        {feeding.waterWeight}g water
+                        {t('starterDetail.feedingComposition', {
+                          starter: feeding.starterWeight,
+                          flour: feeding.flourWeight,
+                          water: feeding.waterWeight,
+                        })}
                       </p>
                       {feeding.notes && (
                         <p className="text-sm text-crust-600 dark:text-crumb-400 mt-1 italic">
@@ -794,13 +826,13 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
                       </p>
                       {feeding.peakTime && (
                         <p className="text-xs text-honey-600 dark:text-honey-400 mt-1">
-                          Peaked:{' '}
-                          {Math.round(
-                            (new Date(feeding.peakTime).getTime() -
-                              new Date(feeding.timestamp).getTime()) /
-                              (1000 * 60 * 60)
-                          )}
-                          h
+                          {t('starterDetail.peakedHours', {
+                            hours: Math.round(
+                              (new Date(feeding.peakTime).getTime() -
+                                new Date(feeding.timestamp).getTime()) /
+                                (1000 * 60 * 60)
+                            ),
+                          })}
                         </p>
                       )}
                     </div>
@@ -811,21 +843,21 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
 
             {feedings.length > 10 && (
               <p className="text-center text-sm text-crust-500 dark:text-crumb-500 pt-2">
-                And {feedings.length - 10} more feedings...
+                {t('starterDetail.moreFeedings', { count: feedings.length - 10 })}
               </p>
             )}
           </div>
         ) : (
           <Card padding="lg" className="text-center">
             <p className="text-crust-600 dark:text-crumb-400">
-              No feedings recorded yet
+              {t('starterDetail.noFeedingsYet')}
             </p>
             <Button
               size="sm"
               className="mt-3"
               onClick={() => openModal('feed-starter', { starterId: starter.uuid })}
             >
-              Log First Feeding
+              {t('starterDetail.logFirstFeeding')}
             </Button>
           </Card>
         )}
@@ -836,9 +868,9 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
         isOpen={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
         onConfirm={handleDelete}
-        title={`Delete ${starter.name}?`}
-        message="This will permanently delete this starter and all its feeding history. This action cannot be undone."
-        confirmText="Delete"
+        title={t('starterDetail.deleteConfirmTitle', { name: starter.name })}
+        message={t('starterDetail.deleteConfirmMessage')}
+        confirmText={t('common.delete')}
         variant="danger"
       />
 
@@ -860,20 +892,19 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
       <BottomSheet
         isOpen={showHelp}
         onClose={() => setShowHelp(false)}
-        title="Analyzing your starter"
+        title={t('starterDetail.help.title')}
       >
         <div className="space-y-5">
           <p className="text-sm text-crust-600 dark:text-crumb-400">
-            Take a photo of your starter and get a read on how active and ready
-            it looks. Here's how it works:
+            {t('starterDetail.help.intro')}
           </p>
 
           {/* Steps */}
           <ol className="space-y-3">
             {[
-              { n: 1, t: 'Tap "Analyze"', d: 'On this starter\'s page, tap the Analyze button.' },
-              { n: 2, t: 'Add a photo', d: 'Take a photo or pick one from your gallery — a clear, well-lit shot of the surface works best.' },
-              { n: 3, t: 'Get your results', d: 'You\'ll see scores plus a few observations and suggestions, saved to this starter.' },
+              { n: 1, t: t('starterDetail.help.step1Title'), d: t('starterDetail.help.step1Body') },
+              { n: 2, t: t('starterDetail.help.step2Title'), d: t('starterDetail.help.step2Body') },
+              { n: 3, t: t('starterDetail.help.step3Title'), d: t('starterDetail.help.step3Body') },
             ].map((s) => (
               <li key={s.n} className="flex gap-3">
                 <span className="flex-shrink-0 w-6 h-6 rounded-full bg-honey-100 dark:bg-honey-900/30 text-honey-700 dark:text-honey-400 text-xs font-semibold flex items-center justify-center">
@@ -893,13 +924,12 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
               <div className="flex items-center gap-2 mb-1">
                 <Cpu className="w-4 h-4 text-honey-500" />
                 <p className="font-medium text-crust-800 dark:text-crumb-100">
-                  Quick estimate <span className="text-success-600 dark:text-success-400">· free</span>
+                  {t('starterDetail.help.quickEstimateTitle')}{' '}
+                  <span className="text-success-600 dark:text-success-400">{t('starterDetail.help.freeTag')}</span>
                 </p>
               </div>
               <p className="text-sm text-crust-600 dark:text-crumb-400">
-                Runs entirely on your device — no account, no internet needed. It looks at
-                bubble activity and surface texture to estimate how active your starter is.
-                It's a rough guide, not a verdict.
+                {t('starterDetail.help.quickEstimateBody')}
               </p>
             </div>
 
@@ -907,17 +937,17 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
               <div className="flex items-center gap-2 mb-1">
                 <Sparkles className="w-4 h-4 text-honey-500" />
                 <p className="font-medium text-crust-800 dark:text-crumb-100">
-                  Deep analysis (Claude) <span className="text-crust-500 dark:text-crumb-500">· needs a key</span>
+                  {t('starterDetail.help.deepAnalysisTitle')}{' '}
+                  <span className="text-crust-500 dark:text-crumb-500">{t('starterDetail.help.needsKeyTag')}</span>
                 </p>
               </div>
               <p className="text-sm text-crust-600 dark:text-crumb-400">
-                Sends the photo to Claude for richer, more detailed advice. Add an Anthropic
-                API key in Settings to unlock it — it costs a fraction of a cent per analysis.
+                {t('starterDetail.help.deepAnalysisBody')}
               </p>
               {!hasClaudeKey && (
                 <p className="mt-2 text-sm text-crust-500 dark:text-crumb-500 flex items-center gap-1.5">
                   <KeyRound className="w-3.5 h-3.5" />
-                  Settings → AI Features → add your API key
+                  {t('starterDetail.help.settingsPath')}
                 </p>
               )}
             </div>
@@ -928,36 +958,33 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
             <div className="flex items-center gap-2 mb-1.5">
               <FlaskConical className="w-4 h-4 text-honey-600 dark:text-honey-400" />
               <p className="font-medium text-crust-800 dark:text-crumb-100">
-                What's a float test?
+                {t('starterDetail.help.floatTestTitle')}
               </p>
             </div>
             <p className="text-sm text-crust-600 dark:text-crumb-400">
-              A quick way to check if your starter is ready: drop a small spoonful into a glass
-              of room-temperature water.
+              {t('starterDetail.help.floatTestIntro')}
             </p>
             <ul className="mt-2 space-y-1 text-sm">
               <li className="flex gap-2 text-crust-700 dark:text-crumb-300">
                 <span className="text-success-600 dark:text-success-400">●</span>
-                <span><strong>Floats</strong> — it's full of gas and active. Good to bake.</span>
+                <span><strong>{t('starterDetail.help.floatsWord')}</strong> — {t('starterDetail.help.floatsBody')}</span>
               </li>
               <li className="flex gap-2 text-crust-700 dark:text-crumb-300">
                 <span className="text-warning-600 dark:text-warning-400">●</span>
-                <span><strong>Sinks</strong> — not enough rise yet. Give it more time, or feed it and wait.</span>
+                <span><strong>{t('starterDetail.help.sinksWord')}</strong> — {t('starterDetail.help.sinksBody')}</span>
               </li>
             </ul>
             <p className="mt-2 text-xs text-crust-500 dark:text-crumb-500">
-              It's a handy guide, not foolproof — stiff or very wet starters can fool it, and
-              stirring the sample first lets the gas escape.
+              {t('starterDetail.help.floatTestCaveat')}
             </p>
           </div>
 
           <p className="text-xs text-crust-500 dark:text-crumb-500">
-            Tip: a photo taken a few hours after feeding (when it's rising) gives the most
-            useful read.
+            {t('starterDetail.help.tip')}
           </p>
 
           <Button fullWidth onClick={() => setShowHelp(false)}>
-            Got it
+            {t('starterDetail.help.gotIt')}
           </Button>
         </div>
       </BottomSheet>
@@ -966,27 +993,27 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
       <ActionSheet
         isOpen={showPhotoSheet}
         onClose={() => setShowPhotoSheet(false)}
-        title="Analyze starter health"
+        title={t('starterDetail.analyzeSheetTitle')}
         actions={[
           {
-            label: 'Quick estimate · Take Photo',
+            label: t('starterDetail.actionQuickTakePhoto'),
             icon: <Camera className="w-5 h-5" />,
             onClick: () => handleAnalyze('camera', 'local'),
           },
           {
-            label: 'Quick estimate · From Gallery',
+            label: t('starterDetail.actionQuickFromGallery'),
             icon: <ImageIcon className="w-5 h-5" />,
             onClick: () => handleAnalyze('gallery', 'local'),
           },
           ...(hasClaudeKey
             ? [
                 {
-                  label: 'Deep analysis (Claude) · Take Photo',
+                  label: t('starterDetail.actionDeepTakePhoto'),
                   icon: <Sparkles className="w-5 h-5" />,
                   onClick: () => handleAnalyze('camera', 'claude'),
                 },
                 {
-                  label: 'Deep analysis (Claude) · From Gallery',
+                  label: t('starterDetail.actionDeepFromGallery'),
                   icon: <Sparkles className="w-5 h-5" />,
                   onClick: () => handleAnalyze('gallery', 'claude'),
                 },

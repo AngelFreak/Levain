@@ -24,6 +24,7 @@ import {
 import { formatTime } from '../lib/fermentation';
 import type { ActiveTimeline, TimelineStep, Rating } from '../types';
 import { formatDistanceToNow } from 'date-fns';
+import { useTranslation } from '../lib/i18n/useTranslation';
 
 interface ActiveBakePageProps {
   /** Open a specific timeline; falls back to the soonest active one. */
@@ -33,6 +34,7 @@ interface ActiveBakePageProps {
 export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
   const { goBackFromPage, showToast } = useAppStore();
   const { settings } = useSettingsStore();
+  const { t } = useTranslation();
   const [expandedStep, setExpandedStep] = useState<string | null>(null);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [rating, setRating] = useState<Rating>(4);
@@ -122,7 +124,7 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
       }
     } catch (error) {
       console.error('Failed to complete step:', error);
-      showToast('Failed to update step', 'error');
+      showToast(t('activeBake.toastUpdateStepFailed'), 'error');
     }
   };
 
@@ -146,10 +148,10 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
       // Clear the shared persistent notification only if this was the last
       // active bake (status is now updated, so exclude nothing).
       await clearPersistentIfLastActive(timeline.uuid);
-      showToast('Bake abandoned', 'info');
+      showToast(t('activeBake.toastAbandoned'), 'info');
       goBackFromPage();
     } catch (error) {
-      showToast('Failed to abandon bake', 'error');
+      showToast(t('activeBake.toastAbandonFailed'), 'error');
     }
   };
 
@@ -173,15 +175,15 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
     const diffMins = Math.round(diffMs / 60000);
 
     if (diffMins < -60) {
-      return `${Math.abs(Math.round(diffMins / 60))}h ago`;
+      return t('activeBake.timeHoursAgo', { hours: Math.abs(Math.round(diffMins / 60)) });
     }
     if (diffMins < 0) {
-      return `${Math.abs(diffMins)}m ago`;
+      return t('activeBake.timeMinutesAgo', { minutes: Math.abs(diffMins) });
     }
     if (diffMins < 60) {
-      return `in ${diffMins}m`;
+      return t('activeBake.timeInMinutes', { minutes: diffMins });
     }
-    return `in ${Math.round(diffMins / 60)}h`;
+    return t('activeBake.timeInHours', { hours: Math.round(diffMins / 60) });
   };
 
   const handleSaveToJournal = async () => {
@@ -191,12 +193,12 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
       await createBakeFromTimeline(timeline, rating, completeNotes);
       // Now mark the bake as completed
       await db.activeTimelines.update(timeline.id, { status: 'completed' });
-      showToast('Bake saved to journal!', 'success');
+      showToast(t('activeBake.toastSavedToJournal'), 'success');
       setShowCompleteModal(false);
       goBackFromPage();
     } catch (error) {
       console.error('Failed to save bake:', error);
-      showToast('Failed to save bake', 'error');
+      showToast(t('activeBake.toastSaveFailed'), 'error');
     } finally {
       setIsSaving(false);
     }
@@ -207,7 +209,7 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
       // Mark the bake as completed even if skipping save
       await db.activeTimelines.update(timeline.id, { status: 'completed' });
     }
-    showToast('Bake complete! Great job!', 'success');
+    showToast(t('activeBake.toastComplete'), 'success');
     setShowCompleteModal(false);
     goBackFromPage();
   };
@@ -220,10 +222,10 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
           className="flex items-center gap-2 text-crust-600 dark:text-crumb-400 mb-6"
         >
           <ArrowLeft className="w-5 h-5" />
-          Back
+          {t('common.back')}
         </button>
         <Card padding="lg" className="text-center">
-          <p className="text-crust-600 dark:text-crumb-400">No active bake found</p>
+          <p className="text-crust-600 dark:text-crumb-400">{t('activeBake.noActiveBake')}</p>
         </Card>
       </div>
     );
@@ -246,13 +248,13 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
           className="flex items-center gap-2 text-crust-600 dark:text-crumb-400"
         >
           <ArrowLeft className="w-5 h-5" />
-          Back
+          {t('common.back')}
         </button>
         <button
           onClick={handleAbandonBake}
           className="text-sm text-error-500 hover:text-error-600"
         >
-          Abandon
+          {t('activeBake.abandon')}
         </button>
       </motion.div>
 
@@ -269,15 +271,15 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
           <div className="flex items-center gap-4 text-sm text-crust-600 dark:text-crumb-400 mb-4">
             <span className="flex items-center gap-1">
               <Clock className="w-4 h-4" />
-              Started {formatDistanceToNow(new Date(timeline.startTime))} ago
+              {t('activeBake.startedAgo', { duration: formatDistanceToNow(new Date(timeline.startTime)) })}
             </span>
           </div>
 
           {/* Progress Bar */}
           <div className="mb-2">
             <div className="flex justify-between text-xs text-crust-500 dark:text-crumb-500 mb-1">
-              <span>Progress</span>
-              <span>{completedSteps} of {timeline.steps.length} steps</span>
+              <span>{t('activeBake.progress')}</span>
+              <span>{t('activeBake.stepsOf', { completed: completedSteps, total: timeline.steps.length })}</span>
             </div>
             <div className="h-2 bg-crumb-200 dark:bg-crust-700 rounded-full overflow-hidden">
               <div
@@ -305,14 +307,14 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
             <div className="flex items-center gap-2 mb-2">
               <PlayCircle className="w-5 h-5" />
               <span className="text-xs font-medium uppercase tracking-wide opacity-90">
-                Current Step
+                {t('activeBake.currentStep')}
               </span>
             </div>
             <h2 className="text-lg font-semibold mb-1">{currentStep.name}</h2>
             <p className="text-sm opacity-90 mb-4 whitespace-pre-line">{currentStep.description}</p>
             <div className="flex items-center justify-between">
               <span className="text-sm opacity-75">
-                Scheduled: {formatTime(new Date(currentStep.scheduledTime), settings.timeFormat)}
+                {t('activeBake.scheduled', { time: formatTime(new Date(currentStep.scheduledTime), settings.timeFormat) })}
               </span>
               <Button
                 variant="secondary"
@@ -321,7 +323,7 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
                 className="bg-white/20 hover:bg-white/30 text-white border-white/30"
               >
                 <CheckCircle2 className="w-4 h-4 mr-1" />
-                Done
+                {t('common.done')}
               </Button>
             </div>
           </Card>
@@ -335,7 +337,7 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
         transition={{ delay: 0.2 }}
       >
         <h2 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-4">
-          All Steps
+          {t('activeBake.allSteps')}
         </h2>
         <div className="space-y-2">
           {timeline.steps.map((step, index) => {
@@ -386,7 +388,7 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
                         disabled={index > timeline.currentStepIndex}
                       >
                         <CheckCircle2 className="w-4 h-4 mr-1" />
-                        Mark Complete
+                        {t('activeBake.markComplete')}
                       </Button>
                     )}
                   </div>
@@ -410,24 +412,28 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
                 <CheckCircle2 className="w-8 h-8 text-success-500" />
               </div>
               <h3 className="text-xl font-display font-bold text-crust-800 dark:text-crumb-100 mb-1">
-                Bake Complete!
+                {t('activeBake.bakeComplete')}
               </h3>
               <p className="text-crust-600 dark:text-crumb-400">
-                How did it turn out?
+                {t('activeBake.howDidItTurnOut')}
               </p>
             </div>
 
             {/* Star Rating */}
             <div className="mb-4">
               <p className="text-sm text-crust-600 dark:text-crumb-400 mb-2 text-center">
-                Rate your bake
+                {t('activeBake.rateYourBake')}
               </p>
-              <div className="flex justify-center gap-2" role="group" aria-label="Rate your bake">
+              <div className="flex justify-center gap-2" role="group" aria-label={t('activeBake.rateYourBake')}>
                 {([1, 2, 3, 4, 5] as Rating[]).map((star) => (
                   <button
                     key={star}
                     onClick={() => setRating(star)}
-                    aria-label={`${star} star${star > 1 ? 's' : ''}`}
+                    aria-label={
+                      star > 1
+                        ? t('activeBake.starsLabel', { count: star })
+                        : t('activeBake.starLabel', { count: star })
+                    }
                     aria-pressed={star <= rating}
                     className="p-1 transition-transform hover:scale-110"
                   >
@@ -447,12 +453,12 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
             {/* Notes */}
             <div className="mb-6">
               <label className="text-sm text-crust-600 dark:text-crumb-400 mb-2 block">
-                Notes (optional)
+                {t('activeBake.notesLabel')}
               </label>
               <textarea
                 value={completeNotes}
                 onChange={(e) => setCompleteNotes(e.target.value)}
-                placeholder="What worked well? What to improve next time?"
+                placeholder={t('activeBake.notesPlaceholder')}
                 className="w-full px-3 py-2 rounded-lg border border-crumb-300 dark:border-crust-700 bg-white dark:bg-crust-800 text-crust-800 dark:text-crumb-100 placeholder-crust-400 dark:placeholder-crumb-600 resize-none"
                 rows={3}
               />
@@ -466,14 +472,14 @@ export function ActiveBakePage({ timelineId }: ActiveBakePageProps) {
                 className="flex-1"
                 disabled={isSaving}
               >
-                Skip
+                {t('common.skip')}
               </Button>
               <Button
                 onClick={handleSaveToJournal}
                 className="flex-1"
                 disabled={isSaving}
               >
-                {isSaving ? 'Saving...' : 'Save to Journal'}
+                {isSaving ? t('activeBake.saving') : t('activeBake.saveToJournal')}
               </Button>
             </div>
           </motion.div>

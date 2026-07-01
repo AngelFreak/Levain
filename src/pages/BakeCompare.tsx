@@ -5,22 +5,24 @@ import { Button, Card } from '../components/ui';
 import { useAppStore } from '../stores/appStore';
 import { db } from '../lib/db';
 import { format } from 'date-fns';
+import { useTranslation } from '../lib/i18n/useTranslation';
+import type { TranslationKey } from '../lib/i18n';
 import type { Bake } from '../types';
 
 interface BakeComparePageProps {
   bakeIds: string[];
 }
 
-const FOLD_LABELS: Record<string, string> = {
-  stretch_fold: 'Stretch & fold',
-  coil_fold: 'Coil fold',
-  lamination: 'Lamination',
-  slap_fold: 'Slap & fold',
+const FOLD_LABEL_KEYS: Record<string, TranslationKey> = {
+  stretch_fold: 'bakeCompare.foldStretchFold',
+  coil_fold: 'bakeCompare.foldCoilFold',
+  lamination: 'bakeCompare.foldLamination',
+  slap_fold: 'bakeCompare.foldSlapFold',
 };
-const PROOF_LABELS: Record<string, string> = {
-  room_temp: 'Room temp',
-  cold_retard: 'Cold retard',
-  proofbox: 'Proof box',
+const PROOF_LABEL_KEYS: Record<string, TranslationKey> = {
+  room_temp: 'bakeCompare.proofRoomTemp',
+  cold_retard: 'bakeCompare.proofColdRetard',
+  proofbox: 'bakeCompare.proofProofBox',
 };
 
 /** One comparable metric: a label and how to read it off a bake as a string. */
@@ -29,47 +31,68 @@ interface Metric {
   get: (b: Bake) => string;
 }
 
-const SECTIONS: Array<{ title: string; metrics: Metric[] }> = [
-  {
-    title: 'Ingredients',
-    metrics: [
-      { label: 'Flour', get: (b) => `${b.ingredients.totalFlour} g` },
-      { label: 'Hydration', get: (b) => `${b.ingredients.hydration}%` },
-      { label: 'Starter', get: (b) => `${b.ingredients.starterPercent}%` },
-      { label: 'Salt', get: (b) => `${b.ingredients.saltPercent}%` },
-    ],
-  },
-  {
-    title: 'Process',
-    metrics: [
-      { label: 'Bulk', get: (b) => (b.processKnown === false ? '—' : `${b.process.bulkTime}h @ ${b.process.bulkTemp}°C`) },
-      { label: 'Folds', get: (b) => (b.processKnown === false ? '—' : `${b.process.folds} × ${FOLD_LABELS[b.process.foldMethod]}`) },
-      { label: 'Proof', get: (b) => (b.processKnown === false ? '—' : `${PROOF_LABELS[b.process.proofMethod]} · ${b.process.proofTime}h`) },
-    ],
-  },
-  {
-    title: 'Baking',
-    metrics: [
-      { label: 'Oven', get: (b) => (b.bakingKnown === false ? '—' : `${b.baking.ovenTemp}°C`) },
-    ],
-  },
-  {
-    title: 'Results',
-    metrics: [
-      { label: 'Overall', get: (b) => `${b.results.overall}/5` },
-      { label: 'Oven spring', get: (b) => `${b.results.ovenSpring}/5` },
-      { label: 'Crumb', get: (b) => `${b.results.crumbStructure}/5` },
-      { label: 'Crust', get: (b) => `${b.results.crust}/5` },
-      { label: 'Flavor', get: (b) => `${b.results.flavor}/5` },
-      { label: 'Sourness', get: (b) => `${b.results.sourness}/5` },
-    ],
-  },
-];
-
 export function BakeComparePage({ bakeIds }: BakeComparePageProps) {
   const { goBackFromPage } = useAppStore();
+  const { t } = useTranslation();
   const [bakes, setBakes] = useState<Bake[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Built inside the component so metric getters can resolve labels via `t`.
+  const sections: Array<{ title: string; metrics: Metric[] }> = [
+    {
+      title: t('bakeCompare.sectionIngredients'),
+      metrics: [
+        { label: t('bakeCompare.metricFlour'), get: (b) => `${b.ingredients.totalFlour} g` },
+        { label: t('bakeCompare.metricHydration'), get: (b) => `${b.ingredients.hydration}%` },
+        { label: t('bakeCompare.metricStarter'), get: (b) => `${b.ingredients.starterPercent}%` },
+        { label: t('bakeCompare.metricSalt'), get: (b) => `${b.ingredients.saltPercent}%` },
+      ],
+    },
+    {
+      title: t('bakeCompare.sectionProcess'),
+      metrics: [
+        {
+          label: t('bakeCompare.metricBulk'),
+          get: (b) =>
+            b.processKnown === false ? '—' : `${b.process.bulkTime}h @ ${b.process.bulkTemp}°C`,
+        },
+        {
+          label: t('bakeCompare.metricFolds'),
+          get: (b) =>
+            b.processKnown === false
+              ? '—'
+              : `${b.process.folds} × ${t(FOLD_LABEL_KEYS[b.process.foldMethod])}`,
+        },
+        {
+          label: t('bakeCompare.metricProof'),
+          get: (b) =>
+            b.processKnown === false
+              ? '—'
+              : `${t(PROOF_LABEL_KEYS[b.process.proofMethod])} · ${b.process.proofTime}h`,
+        },
+      ],
+    },
+    {
+      title: t('bakeCompare.sectionBaking'),
+      metrics: [
+        {
+          label: t('bakeCompare.metricOven'),
+          get: (b) => (b.bakingKnown === false ? '—' : `${b.baking.ovenTemp}°C`),
+        },
+      ],
+    },
+    {
+      title: t('bakeCompare.sectionResults'),
+      metrics: [
+        { label: t('bakeCompare.metricOverall'), get: (b) => `${b.results.overall}/5` },
+        { label: t('bakeCompare.metricOvenSpring'), get: (b) => `${b.results.ovenSpring}/5` },
+        { label: t('bakeCompare.metricCrumb'), get: (b) => `${b.results.crumbStructure}/5` },
+        { label: t('bakeCompare.metricCrust'), get: (b) => `${b.results.crust}/5` },
+        { label: t('bakeCompare.metricFlavor'), get: (b) => `${b.results.flavor}/5` },
+        { label: t('bakeCompare.metricSourness'), get: (b) => `${b.results.sourness}/5` },
+      ],
+    },
+  ];
 
   useEffect(() => {
     const load = async () => {
@@ -95,10 +118,10 @@ export function BakeComparePage({ bakeIds }: BakeComparePageProps) {
     return (
       <div className="min-h-screen px-4 pt-6 pb-24">
         <Button variant="ghost" onClick={goBackFromPage} leftIcon={<ArrowLeft className="w-5 h-5" />}>
-          Back
+          {t('common.back')}
         </Button>
         <div className="text-center py-12">
-          <p className="text-crust-600 dark:text-crumb-400">Pick at least two bakes to compare.</p>
+          <p className="text-crust-600 dark:text-crumb-400">{t('bakeCompare.needTwoBakes')}</p>
         </div>
       </div>
     );
@@ -111,16 +134,16 @@ export function BakeComparePage({ bakeIds }: BakeComparePageProps) {
     <div className="min-h-screen pb-24">
       <div className="sticky top-0 z-10 bg-warmWhite/95 dark:bg-charcoal/95 backdrop-blur-sm px-4 py-3 border-b border-crumb-200 dark:border-crust-700">
         <Button variant="ghost" size="sm" onClick={goBackFromPage} leftIcon={<ArrowLeft className="w-5 h-5" />}>
-          Back
+          {t('common.back')}
         </Button>
       </div>
 
       <div className="px-4 pt-4">
         <h1 className="text-2xl font-display font-bold text-crust-800 dark:text-crumb-100 mb-1">
-          Compare bakes
+          {t('bakeCompare.title')}
         </h1>
         <p className="text-sm text-crust-500 dark:text-crumb-500 mb-4">
-          Differences are highlighted.
+          {t('bakeCompare.subtitle')}
         </p>
 
         <div className="overflow-x-auto -mx-4 px-4">
@@ -144,7 +167,7 @@ export function BakeComparePage({ bakeIds }: BakeComparePageProps) {
               ))}
             </div>
 
-            {SECTIONS.map((section, si) => (
+            {sections.map((section, si) => (
               <motion.div
                 key={section.title}
                 initial={{ opacity: 0, y: 8 }}

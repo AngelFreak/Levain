@@ -16,6 +16,7 @@ import { db } from '../lib/db';
 import { useAppStore } from '../stores/appStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { requestNotificationPermission, markOnboardingComplete } from '../lib/permissions';
+import { useTranslation } from '../lib/i18n/useTranslation';
 
 interface OnboardingProps {
   isOpen: boolean;
@@ -38,6 +39,7 @@ const FLOUR_OPTIONS = [
 export function Onboarding({ isOpen, onClose, onImport }: OnboardingProps) {
   const { showToast } = useAppStore();
   const { settings, updateSettings } = useSettingsStore();
+  const { t } = useTranslation();
 
   const [step, setStep] = useState<Step>('welcome');
 
@@ -89,10 +91,10 @@ export function Onboarding({ isOpen, onClose, onImport }: OnboardingProps) {
         notes: '',
       });
       setStarterCreated(true);
-      showToast(`${starterName.trim()} is ready!`, 'success');
+      showToast(t('onboarding.toast.starterReady', { name: starterName.trim() }), 'success');
       goNext();
     } catch {
-      showToast('Could not create starter — you can add one later.', 'warning');
+      showToast(t('onboarding.toast.starterFailed'), 'warning');
       goNext();
     } finally {
       setIsSaving(false);
@@ -108,7 +110,7 @@ export function Onboarding({ isOpen, onClose, onImport }: OnboardingProps) {
     if (remindersOn) {
       const granted = await requestNotificationPermission();
       if (!granted) {
-        showToast('Reminders need notification access — enable it in Settings later.', 'info');
+        showToast(t('onboarding.toast.permissionInfo'), 'info');
       }
     }
     goNext();
@@ -121,7 +123,7 @@ export function Onboarding({ isOpen, onClose, onImport }: OnboardingProps) {
       className="fixed inset-0 z-[60] bg-warmWhite dark:bg-charcoal flex flex-col"
       role="dialog"
       aria-modal="true"
-      aria-label="Welcome to Levain"
+      aria-label={t('onboarding.welcome.title')}
     >
       {/* Progress dots */}
       <div className="flex-shrink-0 pt-safe px-6 pt-6">
@@ -180,17 +182,17 @@ export function Onboarding({ isOpen, onClose, onImport }: OnboardingProps) {
       <div className="flex-shrink-0 px-6 pb-safe pb-6 pt-2 space-y-3">
         {step === 'starter' && (
           <Button fullWidth onClick={createStarter} isLoading={isSaving} rightIcon={<ArrowRight className="w-4 h-4" />}>
-            {starterName.trim() ? 'Create starter' : 'Skip for now'}
+            {starterName.trim() ? t('onboarding.starter.create') : t('onboarding.starter.skip')}
           </Button>
         )}
         {step === 'kitchen' && (
           <Button fullWidth onClick={saveKitchen} rightIcon={<ArrowRight className="w-4 h-4" />}>
-            Continue
+            {t('common.continue')}
           </Button>
         )}
         {step === 'tour' && (
           <Button fullWidth onClick={finish}>
-            Start baking
+            {t('onboarding.tour.start')}
           </Button>
         )}
       </div>
@@ -201,27 +203,27 @@ export function Onboarding({ isOpen, onClose, onImport }: OnboardingProps) {
 // ---- Steps ----
 
 function WelcomeStep({ onStart, onImport }: { onStart: () => void; onImport: () => void }) {
+  const { t } = useTranslation();
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center">
       <div className="p-5 bg-honey-100 dark:bg-honey-900/30 rounded-3xl mb-6">
         <Wheat className="w-14 h-14 text-honey-600 dark:text-honey-400" />
       </div>
       <h1 className="text-3xl font-display font-bold text-crust-800 dark:text-crumb-100">
-        Welcome to Levain
+        {t('onboarding.welcome.title')}
       </h1>
       <p className="text-base text-crust-600 dark:text-crumb-400 mt-3 max-w-xs">
-        Your sourdough companion — track your starter, time your bakes, and keep a baking
-        journal. Everything stays on your device.
+        {t('onboarding.welcome.body')}
       </p>
       <div className="w-full max-w-xs mt-8 space-y-3">
         <Button fullWidth onClick={onStart} rightIcon={<ArrowRight className="w-4 h-4" />}>
-          Get started
+          {t('onboarding.welcome.getStarted')}
         </Button>
         <button
           onClick={onImport}
           className="text-sm text-crust-500 dark:text-crumb-500 hover:text-crust-700 dark:hover:text-crumb-300 py-2"
         >
-          I already have a backup — import it
+          {t('onboarding.welcome.import')}
         </button>
       </div>
     </div>
@@ -239,6 +241,7 @@ function StarterStep({
   flourType: string;
   onFlour: (v: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div>
       <div className="flex justify-center mb-5">
@@ -247,15 +250,15 @@ function StarterStep({
         </div>
       </div>
       <h2 className="text-2xl font-display font-semibold text-crust-800 dark:text-crumb-100 text-center">
-        Name your starter
+        {t('onboarding.starter.title')}
       </h2>
       <p className="text-sm text-crust-600 dark:text-crumb-400 text-center mt-2 mb-6">
-        Give your culture a name to start tracking feedings and peaks. You can add more later.
+        {t('onboarding.starter.body')}
       </p>
 
       <Input
-        label="Starter name"
-        placeholder="e.g., Bubbles, Old Faithful"
+        label={t('onboarding.starter.nameLabel')}
+        placeholder={t('onboarding.starter.namePlaceholder')}
         value={name}
         onChange={(e) => onName(e.target.value)}
         autoFocus
@@ -263,7 +266,7 @@ function StarterStep({
 
       <div className="mt-5">
         <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">
-          Primary flour
+          {t('onboarding.starter.flourLabel')}
         </label>
         <div className="bg-surface1 dark:bg-surfaceDark1 rounded-xl border border-crumb-300/50 dark:border-crust-600/50 overflow-hidden">
           {FLOUR_OPTIONS.map((option, index) => (
@@ -312,6 +315,7 @@ function KitchenStep({
   reminders: boolean;
   onReminders: (v: boolean) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div>
       <div className="flex justify-center mb-5">
@@ -320,15 +324,15 @@ function KitchenStep({
         </div>
       </div>
       <h2 className="text-2xl font-display font-semibold text-crust-800 dark:text-crumb-100 text-center">
-        Your kitchen
+        {t('onboarding.kitchen.title')}
       </h2>
       <p className="text-sm text-crust-600 dark:text-crumb-400 text-center mt-2 mb-6">
-        Levain uses room temperature to predict how fast your starter and dough ferment.
+        {t('onboarding.kitchen.body')}
       </p>
 
       <div className="mb-6">
         <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">
-          Typical room temperature
+          {t('onboarding.kitchen.tempLabel')}
         </label>
         <NumberInput value={temp} onChange={onTemp} min={10} max={35} step={1} unit="°C" />
       </div>
@@ -343,9 +347,9 @@ function KitchenStep({
           <Bell className="w-5 h-5 text-honey-600 dark:text-honey-400" />
         </div>
         <div className="flex-1">
-          <p className="text-sm font-medium text-crust-800 dark:text-crumb-100">Feeding reminders</p>
+          <p className="text-sm font-medium text-crust-800 dark:text-crumb-100">{t('onboarding.kitchen.reminders')}</p>
           <p className="text-xs text-crust-500 dark:text-crumb-500">
-            Get notified when it's time to feed your starter
+            {t('onboarding.kitchen.remindersHint')}
           </p>
         </div>
         <div
@@ -365,37 +369,36 @@ function KitchenStep({
 }
 
 function TourStep({ starterCreated }: { starterCreated: boolean }) {
+  const { t } = useTranslation();
   return (
     <div>
       <h2 className="text-2xl font-display font-semibold text-crust-800 dark:text-crumb-100 text-center mb-2">
-        You're all set
+        {t('onboarding.tour.title')}
       </h2>
       <p className="text-sm text-crust-600 dark:text-crumb-400 text-center mb-6">
-        {starterCreated
-          ? "Here's where to find everything."
-          : 'Add a starter any time from the Starters tab. Here’s the lay of the land.'}
+        {starterCreated ? t('onboarding.tour.bodyCreated') : t('onboarding.tour.bodyEmpty')}
       </p>
 
       <div className="space-y-3">
         <TourItem
           icon={<Home className="w-5 h-5 text-honey-600 dark:text-honey-400" />}
-          title="Home"
-          description="Your starter status and active bakes at a glance"
+          title={t('nav.home')}
+          description={t('onboarding.tour.home')}
         />
         <TourItem
           icon={<CalculatorIcon className="w-5 h-5 text-honey-600 dark:text-honey-400" />}
-          title="Calculate"
-          description="Baker's percentages, hydration, and timing planners"
+          title={t('nav.calculate')}
+          description={t('onboarding.tour.calculate')}
         />
         <TourItem
           icon={<Beaker className="w-5 h-5 text-honey-600 dark:text-honey-400" />}
-          title="Starters"
-          description="Track feedings, peaks, and storage (room or fridge)"
+          title={t('nav.starters')}
+          description={t('onboarding.tour.starters')}
         />
         <TourItem
           icon={<BookOpen className="w-5 h-5 text-honey-600 dark:text-honey-400" />}
-          title="Book"
-          description="Recipes plus your baking journal"
+          title={t('nav.book')}
+          description={t('onboarding.tour.book')}
         />
       </div>
     </div>

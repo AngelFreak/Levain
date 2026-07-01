@@ -16,6 +16,7 @@ import {
   formatTime,
   formatDate,
 } from '../../lib/fermentation';
+import { useTranslation } from '../../lib/i18n/useTranslation';
 import type { Recipe, ActiveTimeline, TimelineStep } from '../../types';
 
 interface PlanBakeModalProps {
@@ -56,6 +57,7 @@ const STEP_DURATIONS = {
 export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
   const { showToast, setActiveTab } = useAppStore();
   const { settings } = useSettingsStore();
+  const { t } = useTranslation();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Planning mode
@@ -129,9 +131,9 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
   // Helper to format ingredient list
   const formatIngredients = (scaled: ScaledIngredients, includeStarterSalt: boolean): string => {
     const flourList = scaled.flourBreakdown.map((f) => `• ${f.type}: ${f.grams}g`).join('\n');
-    let result = `${flourList}\n• Water: ${scaled.water}g`;
+    let result = `${flourList}\n• ${t('planBake.ingredientWater')}: ${scaled.water}g`;
     if (includeStarterSalt) {
-      result += `\n• Starter: ${scaled.starter}g\n• Salt: ${scaled.salt}g`;
+      result += `\n• ${t('planBake.ingredientStarter')}: ${scaled.starter}g\n• ${t('planBake.ingredientSalt')}: ${scaled.salt}g`;
     }
     // Add mixing additions
     const mixAdditions = scaled.additions.filter(
@@ -255,60 +257,60 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
       (a) => a.addAt?.toLowerCase().includes('before baking') || a.addAt?.toLowerCase().includes('topping')
     );
     const toppingsText = toppings.length > 0
-      ? '\n\n🎨 Toppings:\n' + toppings.map((t) => `• ${t.name}${t.grams > 0 ? `: ${t.grams}g` : ''}`).join('\n')
+      ? '\n\n🎨 ' + t('planBake.toppingsLabel') + ':\n' + toppings.map((top) => `• ${top.name}${top.grams > 0 ? `: ${top.grams}g` : ''}`).join('\n')
       : '';
 
     // === BUILD STEPS ===
 
     // 1. Feed Starter (if starting from scratch)
     steps.push(createStep(
-      'Feed Starter',
+      t('planBake.stepFeedStarterName'),
       new Date(currentTime),
       STEP_DURATIONS.feedStarter,
-      `Feed your starter at 1:1:1 ratio so it's ready in ~3-4 hours.\n\nYou'll need ${scaled.starter}g active starter for this recipe.`,
-      'Use room temperature water for predictable timing.',
-      'Photo of fed starter'
+      t('planBake.stepFeedStarterDesc', { grams: scaled.starter }),
+      t('planBake.stepFeedStarterTip'),
+      t('planBake.stepFeedStarterPhoto')
     ));
     advanceTime(180); // 3 hours for starter to peak
 
     // 2. Autolyse (if recipe uses it)
     if (hasAutolyse) {
       steps.push(createStep(
-        'Autolyse',
+        t('planBake.stepAutolyseName'),
         new Date(currentTime),
         STEP_DURATIONS.autolyse,
-        `Mix flour and water only (no starter, no salt). Let rest.\n\n📋 Ingredients:\n${formatIngredients(scaled, false)}`,
-        'This hydrates the flour and begins gluten development passively.'
+        `${t('planBake.stepAutolyseDesc')}\n\n📋 ${t('planBake.ingredientsLabel')}:\n${formatIngredients(scaled, false)}`,
+        t('planBake.stepAutolyseTip')
       ));
       advanceTime(STEP_DURATIONS.autolyse);
 
       // 3. Add Starter & Salt
       steps.push(createStep(
-        'Add Starter & Salt',
+        t('planBake.stepAddStarterSaltName'),
         new Date(currentTime),
         STEP_DURATIONS.addStarterSalt,
-        `Add active starter and salt to the autolysed dough. Mix until fully incorporated.\n\n📋 Add:\n• Starter: ${scaled.starter}g\n• Salt: ${scaled.salt}g`,
-        'Use pinching and folding to incorporate. Dough will feel shaggy at first.'
+        `${t('planBake.stepAddStarterSaltDesc')}\n\n📋 ${t('planBake.addLabel')}:\n• ${t('planBake.ingredientStarter')}: ${scaled.starter}g\n• ${t('planBake.ingredientSalt')}: ${scaled.salt}g`,
+        t('planBake.stepAddStarterSaltTip')
       ));
       advanceTime(STEP_DURATIONS.addStarterSalt);
     } else {
       // Mix everything at once
       steps.push(createStep(
-        'Mix Dough',
+        t('planBake.stepMixDoughName'),
         new Date(currentTime),
         STEP_DURATIONS.mixDough,
-        `Mix all ingredients until no dry flour remains.\n\n📋 Ingredients:\n${formatIngredients(scaled, true)}`,
-        'The dough will be sticky - that\'s normal!'
+        `${t('planBake.stepMixDoughDesc')}\n\n📋 ${t('planBake.ingredientsLabel')}:\n${formatIngredients(scaled, true)}`,
+        t('planBake.stepMixDoughTip')
       ));
       advanceTime(STEP_DURATIONS.mixDough);
 
       // Short rest after mixing
       steps.push(createStep(
-        'Rest',
+        t('planBake.stepRestName'),
         new Date(currentTime),
         20,
-        'Let dough rest covered for 20 minutes.',
-        'This allows the flour to hydrate and gluten to relax.'
+        t('planBake.stepRestDesc'),
+        t('planBake.stepRestTip')
       ));
       advanceTime(20);
     }
@@ -320,28 +322,28 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
 
     const totalBulkHours = Math.round(bulkTime / 60 * 10) / 10;
     steps.push(createStep(
-      'Bulk Fermentation Start',
+      t('planBake.stepBulkStartName'),
       new Date(currentTime),
       5,
-      `Begin bulk fermentation at room temperature (~${totalBulkHours} hours total). You'll do ${numFolds} stretch & folds, spaced ${foldInterval} minutes apart.`,
+      t('planBake.stepBulkStartDesc', { hours: totalBulkHours, folds: numFolds, interval: foldInterval }),
       hasColdProof
-        ? 'Dough should increase by 20-40% before going in the fridge.'
-        : 'Dough should increase by 50-75% and show good bubbles.',
-      'Photo at start of bulk'
+        ? t('planBake.stepBulkStartTipCold')
+        : t('planBake.stepBulkStartTipWarm'),
+      t('planBake.stepBulkStartPhoto')
     ));
     advanceTime(foldInterval);
 
     // Add individual fold steps
     for (let i = 1; i <= numFolds; i++) {
       steps.push(createStep(
-        `Stretch & Fold ${i}`,
+        t('planBake.stepFoldName', { index: i }),
         new Date(currentTime),
         STEP_DURATIONS.fold,
-        `Perform stretch and fold set ${i} of ${numFolds}.\n\nWet your hands, stretch one side of the dough up and over to the center. Rotate bowl 90° and repeat 4 times.`,
+        t('planBake.stepFoldDesc', { index: i, total: numFolds }),
         i === 1
-          ? 'Be gentle but thorough. The dough will become smoother with each set.'
+          ? t('planBake.stepFoldTipFirst')
           : i === numFolds
-          ? 'Last fold! Dough should be noticeably smoother and hold its shape better.'
+          ? t('planBake.stepFoldTipLast')
           : undefined
       ));
 
@@ -355,16 +357,16 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
 
     // Check bulk progress
     steps.push(createStep(
-      'Check Bulk Progress',
+      t('planBake.stepCheckBulkName'),
       new Date(currentTime),
       5,
       hasColdProof
-        ? 'Check if dough has risen 20-40% and shows some bubbles. Ready for the fridge!'
-        : 'Check if bulk fermentation is complete. Dough should have increased 50-75%, feel airy, and show bubbles on the surface and sides.',
+        ? t('planBake.stepCheckBulkDescCold')
+        : t('planBake.stepCheckBulkDescWarm'),
       hasColdProof
-        ? 'The cold proof will continue fermentation slowly overnight.'
-        : 'If not ready, let it continue for another 30 minutes.',
-      'Photo of bulk fermentation progress'
+        ? t('planBake.stepCheckBulkTipCold')
+        : t('planBake.stepCheckBulkTipWarm'),
+      t('planBake.stepCheckBulkPhoto')
     ));
 
     // 5. Cold Proof workflow (for overnight recipes)
@@ -372,12 +374,12 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
       if (isBunsOrRolls) {
         // Buns/rolls: put bulk dough in fridge, shape in morning
         steps.push(createStep(
-          'Transfer to Fridge',
+          t('planBake.stepTransferFridgeName'),
           new Date(currentTime),
           5,
-          `Transfer bulk dough to a covered container and refrigerate overnight (~${Math.round(coldProofTime / 60)} hours).\n\nDo NOT shape yet - you'll shape cold dough in the morning.`,
-          'Cold bulk develops flavor. Cold dough is easier to shape!',
-          'Photo of dough before fridge'
+          t('planBake.stepTransferFridgeDesc', { hours: Math.round(coldProofTime / 60) }),
+          t('planBake.stepTransferFridgeTip'),
+          t('planBake.stepDoughBeforeFridgePhoto')
         ));
         advanceTime(coldProofTime, true); // Overnight is OK
 
@@ -388,72 +390,72 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
 
         // Morning: pull from fridge
         steps.push(createStep(
-          'Pull from Fridge',
+          t('planBake.stepPullFridgeName'),
           new Date(currentTime),
           5,
-          'Remove cold dough from refrigerator. Start preheating oven.',
-          'Cold dough handles beautifully - work quickly to maintain the chill.'
+          t('planBake.stepPullFridgeDesc'),
+          t('planBake.stepPullFridgeTip')
         ));
         advanceTime(5);
 
         // Preheat (while shaping)
         steps.push(createStep(
-          'Preheat Oven',
+          t('planBake.stepPreheatName'),
           new Date(currentTime),
           STEP_DURATIONS.preheatOven,
-          `Preheat oven to ${bakeTemp}. Place baking sheet or stone inside.`,
-          'A fully preheated oven is crucial for good rise.'
+          t('planBake.stepPreheatRollsDesc', { temp: bakeTemp }),
+          t('planBake.stepPreheatTip')
         ));
 
         // Shape during preheat
         const shapeTime = new Date(currentTime.getTime() + 10 * 60 * 1000);
         steps.push(createStep(
-          'Divide & Shape',
+          t('planBake.stepDivideShapeName'),
           shapeTime,
           15,
-          `Divide cold dough into portions. Shape into rounds or desired form.${toppingsText}`,
-          'Work on a lightly floured surface. Cold dough holds its shape well.',
-          'Photo of shaped rolls'
+          `${t('planBake.stepDivideShapeDesc')}${toppingsText}`,
+          t('planBake.stepDivideShapeTip'),
+          t('planBake.stepShapedRollsPhoto')
         ));
         advanceTime(STEP_DURATIONS.preheatOven);
 
       } else {
         // Bread loaf: pre-shape, final shape, then cold proof shaped
         steps.push(createStep(
-          'Pre-Shape',
+          t('planBake.stepPreShapeName'),
           new Date(currentTime),
           STEP_DURATIONS.preshape,
-          'Gently turn dough onto work surface. Shape into a rough round, building light tension.',
-          'Use minimal flour - a slightly tacky surface helps build tension.'
+          t('planBake.stepPreShapeLoafDesc'),
+          t('planBake.stepPreShapeTip')
         ));
         advanceTime(STEP_DURATIONS.preshape);
 
         steps.push(createStep(
-          'Bench Rest',
+          t('planBake.stepBenchRestName'),
           new Date(currentTime),
           STEP_DURATIONS.benchRest,
-          'Cover the pre-shaped dough and let it rest on the counter.',
-          'This relaxes the gluten for easier final shaping.'
+          t('planBake.stepBenchRestLoafDesc'),
+          t('planBake.stepBenchRestTip')
         ));
         advanceTime(STEP_DURATIONS.benchRest);
 
         steps.push(createStep(
-          'Final Shape',
+          t('planBake.stepFinalShapeName'),
           new Date(currentTime),
           STEP_DURATIONS.finalShape,
-          'Shape the dough into final form (batard, boule, etc.). Place seam-side up in floured proofing basket.',
-          'Create good surface tension for oven spring.',
-          'Photo of shaped dough'
+          t('planBake.stepFinalShapeLoafDesc'),
+          t('planBake.stepFinalShapeLoafTip'),
+          t('planBake.stepShapedDoughPhoto')
         ));
         advanceTime(STEP_DURATIONS.finalShape);
 
         steps.push(createStep(
-          'Cold Proof (Overnight)',
+          t('planBake.stepColdProofName'),
           new Date(currentTime),
           coldProofTime,
-          `Cover and refrigerate shaped dough overnight (~${Math.round(coldProofTime / 60)} hours).\n\nSleep well! The cold develops flavor and makes scoring easier.`,
-          'Can extend up to 48 hours for more sour flavor.',
-          'Photo of dough before fridge'
+          t('planBake.stepColdProofDesc', { hours: Math.round(coldProofTime / 60) }),
+          t('planBake.stepColdProofTip'),
+          t('planBake.stepDoughBeforeFridgePhoto')
         ));
         advanceTime(coldProofTime, true);
 
@@ -463,59 +465,59 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
         }
 
         steps.push(createStep(
-          'Preheat Oven',
+          t('planBake.stepPreheatName'),
           new Date(currentTime),
           STEP_DURATIONS.preheatOven,
-          `Preheat oven to ${bakeTemp} with Dutch oven inside.`,
-          'A fully preheated Dutch oven is crucial for oven spring.'
+          t('planBake.stepPreheatDutchDesc', { temp: bakeTemp }),
+          t('planBake.stepPreheatDutchTip')
         ));
         advanceTime(STEP_DURATIONS.preheatOven);
       }
     } else {
       // Warm proof workflow
       steps.push(createStep(
-        'Pre-Shape',
+        t('planBake.stepPreShapeName'),
         new Date(currentTime),
         STEP_DURATIONS.preshape,
-        'Gently turn dough onto work surface. Shape into a rough round.',
-        'Use minimal flour - a slightly tacky surface helps build tension.'
+        t('planBake.stepPreShapeWarmDesc'),
+        t('planBake.stepPreShapeTip')
       ));
       advanceTime(STEP_DURATIONS.preshape);
 
       steps.push(createStep(
-        'Bench Rest',
+        t('planBake.stepBenchRestName'),
         new Date(currentTime),
         STEP_DURATIONS.benchRest,
-        'Cover and let the dough rest.',
-        'This relaxes the gluten for easier final shaping.'
+        t('planBake.stepBenchRestWarmDesc'),
+        t('planBake.stepBenchRestTip')
       ));
       advanceTime(STEP_DURATIONS.benchRest);
 
       steps.push(createStep(
-        'Final Shape',
+        t('planBake.stepFinalShapeName'),
         new Date(currentTime),
         STEP_DURATIONS.finalShape,
-        `Shape into final form.${toppingsText}`,
-        'Create good surface tension.',
-        'Photo of shaped dough'
+        `${t('planBake.stepFinalShapeWarmDesc')}${toppingsText}`,
+        t('planBake.stepFinalShapeWarmTip'),
+        t('planBake.stepShapedDoughPhoto')
       ));
       advanceTime(STEP_DURATIONS.finalShape);
 
       steps.push(createStep(
-        'Final Proof',
+        t('planBake.stepFinalProofName'),
         new Date(currentTime),
         STEP_DURATIONS.warmProof,
-        'Proof at room temperature until the poke test passes.',
-        'When poked, dough should slowly spring back but not fully.'
+        t('planBake.stepFinalProofDesc'),
+        t('planBake.stepFinalProofTip')
       ));
       advanceTime(STEP_DURATIONS.warmProof);
 
       steps.push(createStep(
-        'Preheat Oven',
+        t('planBake.stepPreheatName'),
         new Date(currentTime),
         STEP_DURATIONS.preheatOven,
-        `Preheat oven to ${bakeTemp}.`,
-        'Start preheating while dough finishes proofing.'
+        t('planBake.stepPreheatWarmDesc', { temp: bakeTemp }),
+        t('planBake.stepPreheatWarmTip')
       ));
       advanceTime(STEP_DURATIONS.preheatOven);
     }
@@ -523,30 +525,30 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
     // 6. Score & Bake
     if (isBunsOrRolls) {
       steps.push(createStep(
-        'Bake',
+        t('planBake.stepBakeName'),
         new Date(currentTime),
         bakeTime,
-        `Bake at ${bakeTemp} for ${bakeTime} minutes until golden brown.`,
-        'Rotate pan halfway through for even browning.',
-        'Capture your fresh bake!'
+        t('planBake.stepBakeRollsDesc', { temp: bakeTemp, minutes: bakeTime }),
+        t('planBake.stepBakeRollsTip'),
+        t('planBake.stepBakePhoto')
       ));
     } else {
       steps.push(createStep(
-        'Score & Bake (Covered)',
+        t('planBake.stepScoreBakeName'),
         new Date(currentTime),
         20,
-        'Score the dough with a sharp blade. Place in preheated Dutch oven, cover with lid.',
-        'Score with confidence - a swift, angled cut creates the best ear.',
-        'Capture your scoring pattern!'
+        t('planBake.stepScoreBakeDesc'),
+        t('planBake.stepScoreBakeTip'),
+        t('planBake.stepScoreBakePhoto')
       ));
       advanceTime(20);
 
       steps.push(createStep(
-        'Bake (Uncovered)',
+        t('planBake.stepBakeUncoveredName'),
         new Date(currentTime),
         15,
-        'Remove lid and continue baking until deep golden brown.',
-        'Internal temperature should reach 96-99°C (205-210°F).'
+        t('planBake.stepBakeUncoveredDesc'),
+        t('planBake.stepBakeUncoveredTip')
       ));
       advanceTime(15);
     }
@@ -554,12 +556,12 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
 
     // 7. Cool
     steps.push(createStep(
-      'Cool',
+      t('planBake.stepCoolName'),
       new Date(currentTime),
       STEP_DURATIONS.cool,
-      'Let cool completely before cutting. The crumb is still setting inside!',
-      'Patience pays off - cutting too early releases steam and affects texture.',
-      'Photo of your finished bake!'
+      t('planBake.stepCoolDesc'),
+      t('planBake.stepCoolTip'),
+      t('planBake.stepCoolPhoto')
     ));
 
     return steps;
@@ -641,7 +643,7 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
         notifications,
         notificationBaseId: baseNotificationId,
         photos: [],
-        notes: `Scaled to ${scaledIngredients.flour}g flour (${scaleFactor}x)`,
+        notes: t('planBake.scaledNote', { grams: scaledIngredients.flour, factor: scaleFactor }),
       };
 
       await db.activeTimelines.add(timeline);
@@ -663,19 +665,19 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
       if (settings.notificationsEnabled) {
         const notificationResult = await scheduleTimelineNotifications(notifications, baseNotificationId);
         if (notificationResult.permissionDenied) {
-          showToast('Bake planned! Enable notifications for reminders.', 'warning');
+          showToast(t('planBake.toastPlannedNoNotifications'), 'warning');
         } else {
-          showToast(`${recipe.name} planned! You'll be notified for each step.`, 'success');
+          showToast(t('planBake.toastPlannedWithNotifications', { name: recipe.name }), 'success');
         }
       } else {
-        showToast(`${recipe.name} planned!`, 'success');
+        showToast(t('planBake.toastPlanned', { name: recipe.name }), 'success');
       }
 
       handleClose();
       setActiveTab('home');
     } catch (error) {
       console.error('Failed to plan bake:', error);
-      showToast('Failed to plan bake', 'error');
+      showToast(t('planBake.toastFailed'), 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -699,7 +701,7 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
   const footerContent = (
     <div className="flex gap-3">
       <Button variant="ghost" onClick={handleClose} className="flex-1">
-        Cancel
+        {t('common.cancel')}
       </Button>
       <Button
         onClick={handleStartBake}
@@ -708,13 +710,13 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
         leftIcon={<Play className="w-4 h-4" />}
         className="flex-1"
       >
-        {planMode === 'bake-now' ? 'Start Now' : 'Plan Bake'}
+        {planMode === 'bake-now' ? t('planBake.startNow') : t('planBake.planBake')}
       </Button>
     </div>
   );
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={handleClose} title="Plan Bake" footer={footerContent}>
+    <BottomSheet isOpen={isOpen} onClose={handleClose} title={t('planBake.title')} footer={footerContent}>
       <div className="space-y-5">
         {/* Recipe Header */}
         <div className="flex items-center gap-3 p-3 bg-surface2 dark:bg-surfaceDark2 rounded-xl">
@@ -726,7 +728,7 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
               {recipe.name}
             </h3>
             <p className="text-xs text-crust-500 dark:text-crumb-500">
-              ~{totalHours} hours total • {schedule?.steps.length || 0} steps
+              {t('planBake.recipeSummary', { hours: totalHours, steps: schedule?.steps.length || 0 })}
             </p>
           </div>
         </div>
@@ -742,7 +744,7 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
             }`}
           >
             <Clock className="w-4 h-4" />
-            <span className="text-sm font-medium">Schedule</span>
+            <span className="text-sm font-medium">{t('planBake.modeSchedule')}</span>
           </button>
           <button
             onClick={() => setPlanMode('bake-now')}
@@ -753,7 +755,7 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
             }`}
           >
             <Zap className="w-4 h-4" />
-            <span className="text-sm font-medium">Bake Now</span>
+            <span className="text-sm font-medium">{t('planBake.modeBakeNow')}</span>
           </button>
         </div>
 
@@ -762,7 +764,7 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
           <>
             <div>
               <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">
-                When do you want bread ready?
+                {t('planBake.readyQuestion')}
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <input
@@ -787,10 +789,10 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
               </div>
               <div className="flex-1">
                 <span className="text-sm font-medium text-crust-700 dark:text-crumb-200">
-                  Keep nights free
+                  {t('planBake.keepNightsFree')}
                 </span>
                 <p className="text-xs text-crust-500 dark:text-crumb-500">
-                  Avoid steps during 23:00 - 07:00
+                  {t('planBake.keepNightsFreeHint')}
                 </p>
               </div>
               <input
@@ -807,10 +809,10 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
               </div>
               <div className="flex-1">
                 <span className="text-sm font-medium text-crust-700 dark:text-crumb-200">
-                  Overnight proofing
+                  {t('planBake.overnightProofing')}
                 </span>
                 <p className="text-xs text-crust-500 dark:text-crumb-500">
-                  Cold proof in fridge overnight
+                  {t('planBake.overnightProofingHint')}
                 </p>
               </div>
               <input
@@ -826,10 +828,10 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
                 <Sun className="w-5 h-5 text-green-600 dark:text-green-400" />
                 <div>
                   <p className="text-sm font-medium text-green-700 dark:text-green-300">
-                    Start: {formatDate(schedule.startTime)} at {formatTime(schedule.startTime, settings.timeFormat)}
+                    {t('planBake.startLine', { date: formatDate(schedule.startTime), time: formatTime(schedule.startTime, settings.timeFormat) })}
                   </p>
                   <p className="text-xs text-green-600 dark:text-green-400">
-                    Ready: {formatDate(new Date(readyDate))} at {readyTime}
+                    {t('planBake.readyLine', { date: formatDate(new Date(readyDate)), time: readyTime })}
                   </p>
                 </div>
               </div>
@@ -838,7 +840,7 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
             {!isFeasible && (
               <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
                 <p className="text-sm text-red-700 dark:text-red-300">
-                  Not enough time! Please choose a later ready time.
+                  {t('planBake.notEnoughTime')}
                 </p>
               </div>
             )}
@@ -851,10 +853,10 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
               <Zap className="w-5 h-5 text-amber-600 dark:text-amber-400" />
               <div>
                 <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
-                  Starting immediately
+                  {t('planBake.startingImmediately')}
                 </p>
                 <p className="text-xs text-amber-600 dark:text-amber-400">
-                  Estimated finish: ~{totalHours} hours from now
+                  {t('planBake.estimatedFinish', { hours: totalHours })}
                 </p>
               </div>
             </div>
@@ -865,10 +867,10 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
               </div>
               <div className="flex-1">
                 <span className="text-sm font-medium text-crust-700 dark:text-crumb-200">
-                  Overnight proofing
+                  {t('planBake.overnightProofing')}
                 </span>
                 <p className="text-xs text-crust-500 dark:text-crumb-500">
-                  Cold proof in fridge overnight
+                  {t('planBake.overnightProofingHint')}
                 </p>
               </div>
               <input
@@ -884,7 +886,7 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
         {/* Scale Recipe */}
         <div>
           <Slider
-            label="Scale Recipe"
+            label={t('planBake.scaleRecipe')}
             value={scaleFactor}
             onChange={setScaleFactor}
             min={0.5}
@@ -903,13 +905,13 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
         {/* Calculated Amounts */}
         <div>
           <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">
-            Ingredients
+            {t('planBake.ingredientsLabel')}
           </label>
           <div className="grid grid-cols-2 gap-3">
             <div className="p-3 bg-surface1 dark:bg-surfaceDark1 rounded-xl">
               <div className="flex items-center gap-2 mb-1">
                 <Wheat className="w-4 h-4 text-honey-500" />
-                <span className="text-xs text-crust-500 dark:text-crumb-500">Flour</span>
+                <span className="text-xs text-crust-500 dark:text-crumb-500">{t('planBake.ingredientFlour')}</span>
               </div>
               <span className="text-lg font-semibold text-crust-800 dark:text-crumb-100">
                 {scaledIngredients.flour}g
@@ -918,7 +920,7 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
             <div className="p-3 bg-surface1 dark:bg-surfaceDark1 rounded-xl">
               <div className="flex items-center gap-2 mb-1">
                 <Droplets className="w-4 h-4 text-blue-500" />
-                <span className="text-xs text-crust-500 dark:text-crumb-500">Water</span>
+                <span className="text-xs text-crust-500 dark:text-crumb-500">{t('planBake.ingredientWater')}</span>
               </div>
               <span className="text-lg font-semibold text-crust-800 dark:text-crumb-100">
                 {scaledIngredients.water}g
@@ -927,7 +929,7 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
             <div className="p-3 bg-surface1 dark:bg-surfaceDark1 rounded-xl">
               <div className="flex items-center gap-2 mb-1">
                 <ChefHat className="w-4 h-4 text-amber-500" />
-                <span className="text-xs text-crust-500 dark:text-crumb-500">Starter</span>
+                <span className="text-xs text-crust-500 dark:text-crumb-500">{t('planBake.ingredientStarter')}</span>
               </div>
               <span className="text-lg font-semibold text-crust-800 dark:text-crumb-100">
                 {scaledIngredients.starter}g
@@ -936,7 +938,7 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
             <div className="p-3 bg-surface1 dark:bg-surfaceDark1 rounded-xl">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-xs">🧂</span>
-                <span className="text-xs text-crust-500 dark:text-crumb-500">Salt</span>
+                <span className="text-xs text-crust-500 dark:text-crumb-500">{t('planBake.ingredientSalt')}</span>
               </div>
               <span className="text-lg font-semibold text-crust-800 dark:text-crumb-100">
                 {scaledIngredients.salt}g
@@ -949,7 +951,7 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
         {scaledIngredients.flourBreakdown.length > 1 && (
           <div className="p-3 bg-surface1 dark:bg-surfaceDark1 rounded-xl">
             <label className="block text-xs font-medium text-crust-500 dark:text-crumb-500 mb-2">
-              Flour Breakdown
+              {t('planBake.flourBreakdown')}
             </label>
             <div className="space-y-1">
               {scaledIngredients.flourBreakdown.map((f, i) => (
@@ -965,7 +967,7 @@ export function PlanBakeModal({ isOpen, onClose, recipe }: PlanBakeModalProps) {
         {/* Steps Preview */}
         <div>
           <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">
-            {schedule?.steps.length || 0} Steps
+            {t('planBake.stepsCount', { count: schedule?.steps.length || 0 })}
           </label>
           <div className="space-y-2 max-h-48 overflow-y-auto">
             {schedule?.steps.map((step, i) => (

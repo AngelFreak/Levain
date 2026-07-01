@@ -14,6 +14,8 @@ import { db } from '../../lib/db';
 import { useAppStore } from '../../stores/appStore';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { takePhoto, savePhoto } from '../../lib/photos';
+import { useTranslation } from '../../lib/i18n/useTranslation';
+import type { TranslationKey } from '../../lib/i18n';
 import type { Bake, Rating, BakePhoto } from '../../types';
 
 interface EditBakeModalProps {
@@ -23,13 +25,13 @@ interface EditBakeModalProps {
   onSave?: () => void;
 }
 
-const RATING_FIELDS: Array<{ key: keyof Pick<Bake['results'], 'overall' | 'ovenSpring' | 'crumbStructure' | 'crust' | 'flavor' | 'sourness'>; label: string }> = [
-  { key: 'overall', label: 'Overall' },
-  { key: 'ovenSpring', label: 'Oven spring' },
-  { key: 'crumbStructure', label: 'Crumb' },
-  { key: 'crust', label: 'Crust' },
-  { key: 'flavor', label: 'Flavor' },
-  { key: 'sourness', label: 'Sourness' },
+const RATING_FIELDS: Array<{ key: keyof Pick<Bake['results'], 'overall' | 'ovenSpring' | 'crumbStructure' | 'crust' | 'flavor' | 'sourness'>; labelKey: TranslationKey }> = [
+  { key: 'overall', labelKey: 'editBake.ratingOverall' },
+  { key: 'ovenSpring', labelKey: 'editBake.ratingOvenSpring' },
+  { key: 'crumbStructure', labelKey: 'editBake.ratingCrumb' },
+  { key: 'crust', labelKey: 'editBake.ratingCrust' },
+  { key: 'flavor', labelKey: 'editBake.ratingFlavor' },
+  { key: 'sourness', labelKey: 'editBake.ratingSourness' },
 ];
 
 function StarPicker({
@@ -41,14 +43,23 @@ function StarPicker({
   onChange: (r: Rating) => void;
   label?: string;
 }) {
+  const { t } = useTranslation();
   return (
-    <div className="flex gap-1" role="group" aria-label={label ? `${label} rating` : 'Rating'}>
+    <div
+      className="flex gap-1"
+      role="group"
+      aria-label={label ? t('editBake.ratingGroupNamed', { label }) : t('editBake.ratingGroup')}
+    >
       {([1, 2, 3, 4, 5] as Rating[]).map((s) => (
         <button
           key={s}
           type="button"
           onClick={() => onChange(s)}
-          aria-label={`${label ? `${label}: ` : ''}${s} star${s > 1 ? 's' : ''}`}
+          aria-label={
+            label
+              ? t('editBake.starAriaNamed', { label, count: s })
+              : t('editBake.starAria', { count: s })
+          }
           aria-pressed={s <= value}
           className="p-0.5"
         >
@@ -65,6 +76,7 @@ function StarPicker({
 }
 
 export function EditBakeModal({ isOpen, onClose, bakeId, onSave }: EditBakeModalProps) {
+  const { t } = useTranslation();
   const { showToast } = useAppStore();
   const recipes = useLiveQuery(() => db.recipes.orderBy('name').toArray(), []);
   const starters = useLiveQuery(() => db.starters.toArray(), []);
@@ -157,18 +169,18 @@ export function EditBakeModal({ isOpen, onClose, bakeId, onSave }: EditBakeModal
           ...prev,
           { id: crypto.randomUUID(), type: 'other', uri: saved.webviewPath, timestamp: new Date() },
         ]);
-        showToast('Photo added!', 'success');
+        showToast(t('editBake.toastPhotoAdded'), 'success');
       }
     } catch (error) {
       console.error('Failed to add photo:', error);
-      showToast('Failed to add photo', 'error');
+      showToast(t('editBake.toastPhotoFailed'), 'error');
     }
   };
 
   const handleSubmit = async () => {
     if (!bake?.id) return;
     if (!recipeName.trim()) {
-      showToast('Please enter a name', 'error');
+      showToast(t('editBake.toastEnterName'), 'error');
       return;
     }
     setIsSubmitting(true);
@@ -196,12 +208,12 @@ export function EditBakeModal({ isOpen, onClose, bakeId, onSave }: EditBakeModal
         notes,
         updatedAt: new Date(),
       });
-      showToast('Bake updated!', 'success');
+      showToast(t('editBake.toastUpdated'), 'success');
       onSave?.();
       onClose();
     } catch (error) {
       console.error('Failed to update bake:', error);
-      showToast('Failed to update bake', 'error');
+      showToast(t('editBake.toastUpdateFailed'), 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -210,33 +222,33 @@ export function EditBakeModal({ isOpen, onClose, bakeId, onSave }: EditBakeModal
   const footer = (
     <div className="flex gap-3">
       <Button variant="ghost" onClick={onClose} className="flex-1">
-        Cancel
+        {t('common.cancel')}
       </Button>
       <Button onClick={handleSubmit} isLoading={isSubmitting} className="flex-1">
-        Save Changes
+        {t('common.saveChanges')}
       </Button>
     </div>
   );
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title="Edit Bake" footer={footer}>
+    <BottomSheet isOpen={isOpen} onClose={onClose} title={t('editBake.title')} footer={footer}>
       <div className="space-y-5">
-        <Input label="Name" value={recipeName} onChange={(e) => setRecipeName(e.target.value)} />
+        <Input label={t('editBake.nameLabel')} value={recipeName} onChange={(e) => setRecipeName(e.target.value)} />
 
-        <DateField label="Date" value={dateStr} onChange={setDateStr} />
+        <DateField label={t('editBake.dateLabel')} value={dateStr} onChange={setDateStr} />
 
         {/* Recipe link */}
         {recipes && recipes.length > 0 && (
           <div>
             <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">
-              Linked recipe (prefills ingredients)
+              {t('editBake.linkedRecipeLabel')}
             </label>
             <select
               value={recipeId ?? ''}
               onChange={(e) => linkRecipe(e.target.value || undefined)}
               className="w-full px-3 py-2.5 rounded-xl border border-crumb-300/50 dark:border-crust-600/50 bg-surface1 dark:bg-surfaceDark1 text-crust-800 dark:text-crumb-100"
             >
-              <option value="">None</option>
+              <option value="">{t('editBake.recipeNone')}</option>
               {recipes.map((r) => (
                 <option key={r.uuid} value={r.uuid}>
                   {r.name}
@@ -250,14 +262,14 @@ export function EditBakeModal({ isOpen, onClose, bakeId, onSave }: EditBakeModal
         {starters && starters.length > 0 && (
           <div>
             <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">
-              Starter used
+              {t('editBake.starterUsedLabel')}
             </label>
             <select
               value={starterId ?? ''}
               onChange={(e) => setStarterId(e.target.value || undefined)}
               className="w-full px-3 py-2.5 rounded-xl border border-crumb-300/50 dark:border-crust-600/50 bg-surface1 dark:bg-surfaceDark1 text-crust-800 dark:text-crumb-100"
             >
-              <option value="">None / commercial yeast</option>
+              <option value="">{t('editBake.starterNone')}</option>
               {starters.map((s) => (
                 <option key={s.uuid} value={s.uuid}>
                   {s.name}
@@ -269,36 +281,39 @@ export function EditBakeModal({ isOpen, onClose, bakeId, onSave }: EditBakeModal
 
         {/* Ingredients */}
         <div className="space-y-3 p-4 bg-surface1 dark:bg-surfaceDark1 rounded-xl">
-          <IngredientRow label="Total flour" value={totalFlour} onChange={setTotalFlour} min={100} max={5000} step={50} unit="g" />
-          <IngredientRow label="Hydration" value={hydration} onChange={setHydration} min={40} max={120} step={1} unit="%" />
-          <IngredientRow label="Starter" value={starterPercent} onChange={setStarterPercent} min={0} max={50} step={1} unit="%" />
-          <IngredientRow label="Salt" value={saltPercent} onChange={setSaltPercent} min={0} max={6} step={0.1} unit="%" />
+          <IngredientRow label={t('editBake.totalFlour')} value={totalFlour} onChange={setTotalFlour} min={100} max={5000} step={50} unit="g" />
+          <IngredientRow label={t('editBake.hydration')} value={hydration} onChange={setHydration} min={40} max={120} step={1} unit="%" />
+          <IngredientRow label={t('editBake.starter')} value={starterPercent} onChange={setStarterPercent} min={0} max={50} step={1} unit="%" />
+          <IngredientRow label={t('editBake.salt')} value={saltPercent} onChange={setSaltPercent} min={0} max={6} step={0.1} unit="%" />
         </div>
 
         {/* Ratings */}
         <div>
-          <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">Ratings</label>
+          <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">{t('editBake.ratingsLabel')}</label>
           <div className="space-y-2 p-4 bg-surface1 dark:bg-surfaceDark1 rounded-xl">
-            {RATING_FIELDS.map(({ key, label }) => (
-              <div key={key} className="flex items-center justify-between">
-                <span className="text-sm text-crust-700 dark:text-crumb-200">{label}</span>
-                <StarPicker value={ratings[key]} onChange={(r) => setRating(key, r)} label={label} />
-              </div>
-            ))}
+            {RATING_FIELDS.map(({ key, labelKey }) => {
+              const label = t(labelKey);
+              return (
+                <div key={key} className="flex items-center justify-between">
+                  <span className="text-sm text-crust-700 dark:text-crumb-200">{label}</span>
+                  <StarPicker value={ratings[key]} onChange={(r) => setRating(key, r)} label={label} />
+                </div>
+              );
+            })}
           </div>
         </div>
 
         {/* Photos */}
         <div>
-          <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">Photos</label>
+          <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">{t('editBake.photosLabel')}</label>
           <div className="flex gap-2 flex-wrap">
             {photos.map((p, i) => (
               <div key={p.id || i} className="relative">
-                <img src={p.uri} alt={`bake ${i + 1}`} className="w-20 h-20 rounded-xl object-cover" />
+                <img src={p.uri} alt={t('editBake.photoAlt', { index: i + 1 })} className="w-20 h-20 rounded-xl object-cover" />
                 <button
                   type="button"
                   onClick={() => setPhotos(photos.filter((_, idx) => idx !== i))}
-                  aria-label={`Remove photo ${i + 1}`}
+                  aria-label={t('editBake.removePhoto', { index: i + 1 })}
                   className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-error-500 text-white flex items-center justify-center"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -308,7 +323,7 @@ export function EditBakeModal({ isOpen, onClose, bakeId, onSave }: EditBakeModal
             <button
               type="button"
               onClick={() => handleAddPhoto('camera')}
-              aria-label="Take photo"
+              aria-label={t('editBake.takePhoto')}
               className="w-20 h-20 rounded-xl border-2 border-dashed border-crumb-300 dark:border-crust-600 flex items-center justify-center text-crust-400"
             >
               <Camera className="w-6 h-6" />
@@ -316,7 +331,7 @@ export function EditBakeModal({ isOpen, onClose, bakeId, onSave }: EditBakeModal
             <button
               type="button"
               onClick={() => handleAddPhoto('gallery')}
-              aria-label="Choose from gallery"
+              aria-label={t('editBake.chooseFromGallery')}
               className="w-20 h-20 rounded-xl border-2 border-dashed border-crumb-300 dark:border-crust-600 flex items-center justify-center text-crust-400"
             >
               <ImageIcon className="w-6 h-6" />
@@ -326,7 +341,7 @@ export function EditBakeModal({ isOpen, onClose, bakeId, onSave }: EditBakeModal
 
         {/* Tags */}
         <div>
-          <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">Tags</label>
+          <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">{t('editBake.tagsLabel')}</label>
           <div className="flex gap-2 flex-wrap mb-2">
             {tags.map((tag) => (
               <span
@@ -336,8 +351,8 @@ export function EditBakeModal({ isOpen, onClose, bakeId, onSave }: EditBakeModal
                 {tag}
                 <button
                   type="button"
-                  onClick={() => setTags(tags.filter((t) => t !== tag))}
-                  aria-label={`Remove tag ${tag}`}
+                  onClick={() => setTags(tags.filter((x) => x !== tag))}
+                  aria-label={t('editBake.removeTag', { tag })}
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -346,7 +361,7 @@ export function EditBakeModal({ isOpen, onClose, bakeId, onSave }: EditBakeModal
           </div>
           <div className="flex gap-2">
             <Input
-              placeholder="Add a tag…"
+              placeholder={t('editBake.addTagPlaceholder')}
               value={tagInput}
               onChange={(e) => setTagInput(e.target.value)}
               onKeyDown={(e) => {
@@ -356,7 +371,7 @@ export function EditBakeModal({ isOpen, onClose, bakeId, onSave }: EditBakeModal
                 }
               }}
             />
-            <Button variant="secondary" onClick={addTag} type="button" aria-label="Add tag">
+            <Button variant="secondary" onClick={addTag} type="button" aria-label={t('editBake.addTag')}>
               <Plus className="w-4 h-4" />
             </Button>
           </div>
@@ -369,21 +384,21 @@ export function EditBakeModal({ isOpen, onClose, bakeId, onSave }: EditBakeModal
             onClick={() => setShowProcess(!showProcess)}
             className="flex items-center justify-between w-full py-2 text-sm text-crust-600 dark:text-crumb-400"
           >
-            <span>{showProcess ? '− Hide' : '+ Add'} process & baking</span>
+            <span>{showProcess ? t('editBake.hideProcess') : t('editBake.addProcess')}</span>
             {showProcess ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
           {showProcess && (
             <div className="space-y-3 mt-2 p-4 bg-surface1 dark:bg-surfaceDark1 rounded-xl">
-              <IngredientRow label="Bulk time" value={bulkTime} onChange={setBulkTime} min={0} max={24} step={0.5} unit="h" />
-              <IngredientRow label="Bulk temp" value={bulkTemp} onChange={setBulkTemp} min={10} max={40} step={1} unit="°C" />
-              <IngredientRow label="Proof time" value={proofTime} onChange={setProofTime} min={0} max={48} step={0.5} unit="h" />
-              <IngredientRow label="Oven temp" value={ovenTemp} onChange={setOvenTemp} min={150} max={500} step={5} unit="°C" />
+              <IngredientRow label={t('editBake.bulkTime')} value={bulkTime} onChange={setBulkTime} min={0} max={24} step={0.5} unit="h" />
+              <IngredientRow label={t('editBake.bulkTemp')} value={bulkTemp} onChange={setBulkTemp} min={10} max={40} step={1} unit="°C" />
+              <IngredientRow label={t('editBake.proofTime')} value={proofTime} onChange={setProofTime} min={0} max={48} step={0.5} unit="h" />
+              <IngredientRow label={t('editBake.ovenTemp')} value={ovenTemp} onChange={setOvenTemp} min={150} max={500} step={5} unit="°C" />
             </div>
           )}
         </div>
 
         {/* Notes */}
-        <Textarea label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
+        <Textarea label={t('editBake.notesLabel')} value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
       </div>
     </BottomSheet>
   );

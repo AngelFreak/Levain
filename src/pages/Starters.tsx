@@ -6,9 +6,11 @@ import { db } from '../lib/db';
 import { getStorageLocation } from '../lib/storage';
 import { formatDistanceToNow } from 'date-fns';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { useTranslation } from '../lib/i18n/useTranslation';
 
 export function StartersPage() {
   const { openModal, navigateTo } = useAppStore();
+  const { t } = useTranslation();
 
   // Use live query for reactive updates
   const starters = useLiveQuery(
@@ -25,14 +27,14 @@ export function StartersPage() {
   };
 
   const getFeedingStatus = (lastFed?: Date) => {
-    if (!lastFed) return { status: 'unknown', label: 'Never fed' };
+    if (!lastFed) return { status: 'unknown', label: t('starters.feedingStatusNeverFed') };
 
     const hoursSinceFed = (Date.now() - new Date(lastFed).getTime()) / (1000 * 60 * 60);
 
-    if (hoursSinceFed < 8) return { status: 'healthy', label: 'Recently fed' };
-    if (hoursSinceFed < 24) return { status: 'ok', label: 'Ready to use' };
-    if (hoursSinceFed < 48) return { status: 'hungry', label: 'Needs feeding' };
-    return { status: 'starving', label: 'Feed urgently!' };
+    if (hoursSinceFed < 8) return { status: 'healthy', label: t('starters.feedingStatusRecentlyFed') };
+    if (hoursSinceFed < 24) return { status: 'ok', label: t('starters.feedingStatusReadyToUse') };
+    if (hoursSinceFed < 48) return { status: 'hungry', label: t('starters.feedingStatusNeedsFeeding') };
+    return { status: 'starving', label: t('starters.feedingStatusFeedUrgently') };
   };
 
   return (
@@ -45,10 +47,10 @@ export function StartersPage() {
       >
         <div>
           <h1 className="text-2xl font-display font-bold text-crust-800 dark:text-crumb-100">
-            Starters
+            {t('nav.starters')}
           </h1>
           <p className="text-crust-600 dark:text-crumb-400 mt-1">
-            Manage your sourdough cultures
+            {t('starters.subtitle')}
           </p>
         </div>
         <Button
@@ -56,7 +58,7 @@ export function StartersPage() {
           leftIcon={<Plus className="w-4 h-4" />}
           onClick={() => openModal('new-starter')}
         >
-          Add
+          {t('common.add')}
         </Button>
       </motion.div>
 
@@ -113,18 +115,18 @@ export function StartersPage() {
                           </h3>
                           {!starter.isActive && (
                             <span className="px-2 py-0.5 text-xs bg-crumb-200 dark:bg-crust-700 text-crust-600 dark:text-crumb-400 rounded-full">
-                              Inactive
+                              {t('starters.inactiveBadge')}
                             </span>
                           )}
                           {getStorageLocation(starter.storageLocation) === 'fridge' ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full flex-shrink-0">
                               <Snowflake className="w-3 h-3" />
-                              Fridge
+                              {t('starters.storageFridge')}
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-honey-100 dark:bg-honey-900/30 text-honey-700 dark:text-honey-400 rounded-full flex-shrink-0">
                               <Home className="w-3 h-3" />
-                              Room
+                              {t('starters.storageRoom')}
                             </span>
                           )}
                         </div>
@@ -143,7 +145,9 @@ export function StartersPage() {
                               starter.healthScore
                             )}`}
                           >
-                            {starter.healthScore ? `${starter.healthScore}% health` : 'No score'}
+                            {starter.healthScore
+                              ? t('starters.healthScore', { score: starter.healthScore })
+                              : t('starters.noScore')}
                           </span>
                           <span
                             className={`px-2 py-0.5 text-xs font-medium rounded-full ${
@@ -171,11 +175,13 @@ export function StartersPage() {
                       <div className="mt-3 pt-3 border-t border-crumb-100 dark:border-crust-800 flex items-center gap-2 text-sm text-crust-500 dark:text-crumb-500">
                         <Clock className="w-4 h-4" />
                         <span>
-                          Fed {formatDistanceToNow(new Date(starter.lastFed))} ago
+                          {t('starters.fedAgo', {
+                            time: formatDistanceToNow(new Date(starter.lastFed)),
+                          })}
                         </span>
                         {starter.averagePeakTime && (
                           <span className="ml-auto">
-                            Peak: ~{starter.averagePeakTime}h
+                            {t('starters.peakTime', { hours: starter.averagePeakTime })}
                           </span>
                         )}
                       </div>
@@ -191,7 +197,7 @@ export function StartersPage() {
                       }}
                       className="w-full py-3 text-sm font-medium text-crust-600 dark:text-crumb-400 hover:bg-crumb-50 dark:hover:bg-crust-800/50 transition-colors"
                     >
-                      Feed Now
+                      {t('starters.feedNow')}
                     </button>
                   </div>
                 </Card>
@@ -210,36 +216,36 @@ export function StartersPage() {
               <Beaker className="w-8 h-8 text-crust-500 dark:text-crumb-400" />
             </div>
             <h3 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-2">
-              No starters yet
+              {t('starters.emptyTitle')}
             </h3>
             <p className="text-crust-600 dark:text-crumb-400 mb-4">
-              Add your sourdough starter to begin tracking feedings
+              {t('starters.emptyBody')}
             </p>
             <Button
               leftIcon={<Plus className="w-4 h-4" />}
               onClick={() => openModal('new-starter')}
             >
-              Add Your Starter
+              {t('starters.addYourStarter')}
             </Button>
           </Card>
 
           {/* Creating a Starter Guide */}
           <Card padding="md" className="bg-honey-50 dark:bg-honey-950/20 border-honey-200 dark:border-honey-800">
             <h4 className="font-medium text-honey-800 dark:text-honey-200 mb-3">
-              🌾 Creating a Starter from Scratch
+              🌾 {t('starters.guideTitle')}
             </h4>
             <div className="space-y-3 text-sm text-honey-700 dark:text-honey-300">
               <div>
-                <p className="font-medium mb-1">Day 1: Mix</p>
-                <p>50g whole grain rye flour + 50g lukewarm water. Cover loosely and keep at 26-28°C.</p>
+                <p className="font-medium mb-1">{t('starters.guideDay1Title')}</p>
+                <p>{t('starters.guideDay1Body')}</p>
               </div>
               <div>
-                <p className="font-medium mb-1">Days 2-7: Feed Daily</p>
-                <p>Discard half, add 50g flour + 50g water. Look for bubbles and a tangy smell.</p>
+                <p className="font-medium mb-1">{t('starters.guideDay2to7Title')}</p>
+                <p>{t('starters.guideDay2to7Body')}</p>
               </div>
               <div>
-                <p className="font-medium mb-1">Ready to Use</p>
-                <p>When it doubles in 4-6 hours and passes the float test, it's ready! This takes 7-14 days.</p>
+                <p className="font-medium mb-1">{t('starters.guideReadyTitle')}</p>
+                <p>{t('starters.guideReadyBody')}</p>
               </div>
             </div>
           </Card>
@@ -247,14 +253,14 @@ export function StartersPage() {
           {/* Tips */}
           <Card padding="md">
             <h4 className="font-medium text-crust-800 dark:text-crumb-100 mb-2">
-              💡 Pro Tips
+              💡 {t('starters.proTipsTitle')}
             </h4>
             <ul className="space-y-2 text-sm text-crust-600 dark:text-crumb-400">
-              <li>• Use organic flour for best results</li>
-              <li>• Whole grain rye activates faster than white flour</li>
-              <li>• Warmer temps (26-28°C) speed up fermentation</li>
-              <li>• Feed when it peaks and starts to fall</li>
-              <li>• A healthy starter smells like beer and yogurt</li>
+              <li>• {t('starters.proTipOrganicFlour')}</li>
+              <li>• {t('starters.proTipRyeActivates')}</li>
+              <li>• {t('starters.proTipWarmerTemps')}</li>
+              <li>• {t('starters.proTipFeedAtPeak')}</li>
+              <li>• {t('starters.proTipHealthySmell')}</li>
             </ul>
           </Card>
         </motion.div>
@@ -270,12 +276,12 @@ export function StartersPage() {
         >
           <Card padding="md" className="bg-honey-50 dark:bg-honey-950/20 border-honey-200 dark:border-honey-800">
             <h4 className="font-medium text-honey-800 dark:text-honey-200 mb-2">
-              💡 Feeding Ratios
+              💡 {t('starters.feedingRatiosTitle')}
             </h4>
             <div className="space-y-2 text-sm text-honey-700 dark:text-honey-300">
-              <p><strong>1:1:1</strong> — Peak in 4-6 hours. Use when baking soon.</p>
-              <p><strong>1:6:6</strong> — Peak in 10-12 hours. Great for daily maintenance.</p>
-              <p className="text-xs mt-2 opacity-75">Ratio = starter : water : flour (by weight)</p>
+              <p><strong>1:1:1</strong> — {t('starters.feedingRatio111')}</p>
+              <p><strong>1:6:6</strong> — {t('starters.feedingRatio166')}</p>
+              <p className="text-xs mt-2 opacity-75">{t('starters.feedingRatioExplainer')}</p>
             </div>
           </Card>
         </motion.div>

@@ -6,6 +6,7 @@ import { useAppStore } from '../../stores/appStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { rescheduleFeedingReminder } from '../../lib/notifications';
 import { getStorageLocation, STORAGE_LOCATION_META } from '../../lib/storage';
+import { useTranslation } from '../../lib/i18n/useTranslation';
 import type { Starter, StorageLocation } from '../../types';
 
 interface EditStarterModalProps {
@@ -18,6 +19,7 @@ interface EditStarterModalProps {
 export function EditStarterModal({ isOpen, onClose, starter, onSave }: EditStarterModalProps) {
   const { showToast } = useAppStore();
   const { settings } = useSettingsStore();
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [flourType, setFlourType] = useState('white');
   const [hydration, setHydration] = useState('100');
@@ -30,18 +32,18 @@ export function EditStarterModal({ isOpen, onClose, starter, onSave }: EditStart
   const today = toDateInputValue(new Date());
 
   const flourOptions = [
-    { value: 'white', label: 'White (AP/Bread)' },
-    { value: 'whole-wheat', label: 'Whole Wheat' },
-    { value: 'rye', label: 'Rye' },
-    { value: 'spelt', label: 'Spelt' },
-    { value: 'mixed', label: 'Mixed' },
+    { value: 'white', label: t('editStarter.flourWhite') },
+    { value: 'whole-wheat', label: t('editStarter.flourWholeWheat') },
+    { value: 'rye', label: t('editStarter.flourRye') },
+    { value: 'spelt', label: t('editStarter.flourSpelt') },
+    { value: 'mixed', label: t('editStarter.flourMixed') },
   ];
 
   const hydrationOptions = [
-    { value: '50', label: '50% (Stiff)' },
-    { value: '65', label: '65% (Medium-Stiff)' },
-    { value: '100', label: '100% (Standard)' },
-    { value: '125', label: '125% (Liquid)' },
+    { value: '50', label: t('editStarter.hydration50') },
+    { value: '65', label: t('editStarter.hydration65') },
+    { value: '100', label: t('editStarter.hydration100') },
+    { value: '125', label: t('editStarter.hydration125') },
   ];
 
   // Populate form when starter changes
@@ -61,7 +63,7 @@ export function EditStarterModal({ isOpen, onClose, starter, onSave }: EditStart
     if (!starter?.id) return;
 
     if (!name.trim()) {
-      showToast('Please enter a name for your starter', 'error');
+      showToast(t('editStarter.nameRequired'), 'error');
       return;
     }
 
@@ -93,12 +95,12 @@ export function EditStarterModal({ isOpen, onClose, starter, onSave }: EditStart
         );
       }
 
-      showToast(`${name} has been updated!`, 'success');
+      showToast(t('editStarter.updateSuccess', { name }), 'success');
       onSave?.(updatedStarter);
       onClose();
     } catch (error) {
       console.error('Failed to update starter:', error);
-      showToast('Failed to update starter', 'error');
+      showToast(t('editStarter.updateFailed'), 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -125,20 +127,20 @@ export function EditStarterModal({ isOpen, onClose, starter, onSave }: EditStart
         onClick={handleClose}
         className="flex-1"
       >
-        Cancel
+        {t('common.cancel')}
       </Button>
       <Button
         onClick={handleSubmit}
         isLoading={isSubmitting}
         className="flex-1"
       >
-        Save Changes
+        {t('common.saveChanges')}
       </Button>
     </div>
   );
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={handleClose} title="Edit Starter" footer={footerContent}>
+    <BottomSheet isOpen={isOpen} onClose={handleClose} title={t('editStarter.title')} footer={footerContent}>
       <div className="space-y-5">
         {/* Icon header */}
         <div className="flex justify-center">
@@ -149,8 +151,8 @@ export function EditStarterModal({ isOpen, onClose, starter, onSave }: EditStart
 
         {/* Form fields */}
         <Input
-          label="Starter Name"
-          placeholder="e.g., Bubbles, Old Faithful"
+          label={t('editStarter.nameLabel')}
+          placeholder={t('editStarter.namePlaceholder')}
           value={name}
           onChange={(e) => setName(e.target.value)}
           autoFocus
@@ -158,17 +160,17 @@ export function EditStarterModal({ isOpen, onClose, starter, onSave }: EditStart
 
         {/* Date created - when the starter was first made */}
         <DateField
-          label="Date Created"
+          label={t('editStarter.dateCreatedLabel')}
           value={createdDate}
           onChange={setCreatedDate}
           max={today}
-          hint="When you first made this starter"
+          hint={t('editStarter.dateCreatedHint')}
         />
 
         {/* Flour Type - Native-style segmented list */}
         <div>
           <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">
-            Primary Flour Type
+            {t('editStarter.flourTypeLabel')}
           </label>
           <div className="bg-surface1 dark:bg-surfaceDark1 rounded-xl border border-crumb-300/50 dark:border-crust-600/50 overflow-hidden">
             {flourOptions.map((option, index) => (
@@ -207,7 +209,7 @@ export function EditStarterModal({ isOpen, onClose, starter, onSave }: EditStart
         {/* Hydration - Native-style segmented list */}
         <div>
           <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">
-            Hydration Level
+            {t('editStarter.hydrationLabel')}
           </label>
           <div className="bg-surface1 dark:bg-surfaceDark1 rounded-xl border border-crumb-300/50 dark:border-crust-600/50 overflow-hidden">
             {hydrationOptions.map((option, index) => (
@@ -246,7 +248,7 @@ export function EditStarterModal({ isOpen, onClose, starter, onSave }: EditStart
         {/* Storage Location - affects feeding reminder cadence */}
         <div>
           <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">
-            Storage
+            {t('editStarter.storageLabel')}
           </label>
           <div className="bg-surface1 dark:bg-surfaceDark1 rounded-xl border border-crumb-300/50 dark:border-crust-600/50 overflow-hidden">
             {(['room', 'fridge'] as StorageLocation[]).map((loc, index) => (
@@ -296,8 +298,8 @@ export function EditStarterModal({ isOpen, onClose, starter, onSave }: EditStart
 
         {/* Notes */}
         <Textarea
-          label="Notes"
-          placeholder="Any special characteristics or history..."
+          label={t('editStarter.notesLabel')}
+          placeholder={t('editStarter.notesPlaceholder')}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={3}
@@ -306,7 +308,7 @@ export function EditStarterModal({ isOpen, onClose, starter, onSave }: EditStart
         {/* Active Toggle */}
         <div>
           <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">
-            Status
+            {t('editStarter.statusLabel')}
           </label>
           <div className="bg-surface1 dark:bg-surfaceDark1 rounded-xl border border-crumb-300/50 dark:border-crust-600/50 overflow-hidden">
             <button
@@ -326,10 +328,10 @@ export function EditStarterModal({ isOpen, onClose, starter, onSave }: EditStart
                     ? 'text-honey-700 dark:text-honey-400'
                     : 'text-crust-700 dark:text-crumb-200'
                 }`}>
-                  Active
+                  {t('editStarter.statusActive')}
                 </span>
                 <p className="text-xs text-crust-500 dark:text-crumb-500 mt-0.5">
-                  Starter appears in feeding list
+                  {t('editStarter.statusActiveHint')}
                 </p>
               </div>
               {isActive && (
@@ -358,10 +360,10 @@ export function EditStarterModal({ isOpen, onClose, starter, onSave }: EditStart
                     ? 'text-honey-700 dark:text-honey-400'
                     : 'text-crust-700 dark:text-crumb-200'
                 }`}>
-                  Inactive
+                  {t('editStarter.statusInactive')}
                 </span>
                 <p className="text-xs text-crust-500 dark:text-crumb-500 mt-0.5">
-                  Hidden from feeding list (archived)
+                  {t('editStarter.statusInactiveHint')}
                 </p>
               </div>
               {!isActive && (

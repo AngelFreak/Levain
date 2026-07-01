@@ -3,28 +3,31 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, BookOpen, Star, Calendar, ChefHat, Clock, Droplets, Search, Play } from 'lucide-react';
 import { Card, Button, Input } from '../components/ui';
 import { useAppStore } from '../stores/appStore';
+import { useTranslation } from '../lib/i18n/useTranslation';
 import { db } from '../lib/db';
 import type { Bake, Recipe, RecipeCategory } from '../types';
+import type { TranslationKey } from '../lib/i18n';
 import { format } from 'date-fns';
 
 type BookTab = 'recipes' | 'journal';
 
-const RECIPE_CATEGORIES: { id: RecipeCategory | 'all'; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'country_loaf', label: 'Country' },
-  { id: 'buns', label: 'Buns & Rolls' },
-  { id: 'sandwich', label: 'Sandwich' },
-  { id: 'focaccia', label: 'Focaccia' },
-  { id: 'pizza', label: 'Pizza' },
-  { id: 'rye', label: 'Rye Bread' },
-  { id: 'whole_grain', label: 'Whole Grain' },
-  { id: 'enriched', label: 'Enriched' },
-  { id: 'specialty', label: 'Specialty' },
-  { id: 'discard', label: 'Discard' },
+const RECIPE_CATEGORIES: { id: RecipeCategory | 'all'; labelKey: TranslationKey }[] = [
+  { id: 'all', labelKey: 'book.categoryAll' },
+  { id: 'country_loaf', labelKey: 'book.categoryCountry' },
+  { id: 'buns', labelKey: 'book.categoryBuns' },
+  { id: 'sandwich', labelKey: 'book.categorySandwich' },
+  { id: 'focaccia', labelKey: 'book.categoryFocaccia' },
+  { id: 'pizza', labelKey: 'book.categoryPizza' },
+  { id: 'rye', labelKey: 'book.categoryRye' },
+  { id: 'whole_grain', labelKey: 'book.categoryWholeGrain' },
+  { id: 'enriched', labelKey: 'book.categoryEnriched' },
+  { id: 'specialty', labelKey: 'book.categorySpecialty' },
+  { id: 'discard', labelKey: 'book.categoryDiscard' },
 ];
 
 export function BookPage() {
   const { openModal, navigateTo, bookIntent, consumeBookIntent } = useAppStore();
+  const { t } = useTranslation();
   // A deep-link intent (e.g. "use your discard") lands us on the Recipes tab at
   // a specific category. Read it as INITIAL state — switching tabs remounts
   // BookPage, so this runs fresh each time the intent is set, avoiding a
@@ -157,10 +160,10 @@ export function BookPage() {
       >
         <div>
           <h1 className="text-2xl font-display font-bold text-crust-800 dark:text-crumb-100">
-            Book
+            {t('nav.book')}
           </h1>
           <p className="text-crust-600 dark:text-crumb-400 mt-1">
-            {activeTab === 'recipes' ? 'Your recipe collection' : 'Your baking history'}
+            {activeTab === 'recipes' ? t('book.recipesSubtitle') : t('book.journalSubtitle')}
           </p>
         </div>
         <Button
@@ -168,7 +171,7 @@ export function BookPage() {
           leftIcon={<Plus className="w-4 h-4" />}
           onClick={() => openModal(activeTab === 'recipes' ? 'new-recipe' : 'start-bake')}
         >
-          {activeTab === 'recipes' ? 'Add Recipe' : 'Log Bake'}
+          {activeTab === 'recipes' ? t('book.addRecipe') : t('book.logBake')}
         </Button>
       </motion.div>
 
@@ -183,7 +186,7 @@ export function BookPage() {
           }`}
         >
           <ChefHat className="w-5 h-5" />
-          Recipes
+          {t('book.tabRecipes')}
         </button>
         <button
           onClick={() => setActiveTab('journal')}
@@ -194,7 +197,7 @@ export function BookPage() {
           }`}
         >
           <BookOpen className="w-5 h-5" />
-          Journal
+          {t('book.tabJournal')}
         </button>
       </div>
 
@@ -210,7 +213,7 @@ export function BookPage() {
             {/* Search */}
             <div className="mb-4">
               <Input
-                placeholder="Search recipes..."
+                placeholder={t('book.searchRecipesPlaceholder')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 leftIcon={<Search className="w-4 h-4" />}
@@ -233,7 +236,7 @@ export function BookPage() {
                         : 'bg-crumb-200 dark:bg-crust-700 text-crust-600 dark:text-crumb-300'
                     }`}
                   >
-                    {category.label}
+                    {t(category.labelKey)}
                   </button>
                 ))}
               </div>
@@ -310,7 +313,7 @@ export function BookPage() {
                                 openModal('plan-bake', { recipeId: recipe.uuid });
                               }}
                             >
-                              Bake
+                              {t('book.bakeButton')}
                             </Button>
                           </div>
                         </div>
@@ -329,19 +332,19 @@ export function BookPage() {
                     <ChefHat className="w-8 h-8 text-crust-500 dark:text-crumb-400" />
                   </div>
                   <h3 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-2">
-                    {searchQuery ? 'No recipes found' : 'No recipes yet'}
+                    {searchQuery ? t('book.noRecipesFound') : t('book.noRecipesYet')}
                   </h3>
                   <p className="text-crust-600 dark:text-crumb-400 mb-4">
                     {searchQuery
-                      ? 'Try a different search term'
-                      : 'Add your favorite bread recipes'}
+                      ? t('book.noRecipesFoundHint')
+                      : t('book.noRecipesYetHint')}
                   </p>
                   {!searchQuery && (
                     <Button
                       leftIcon={<Plus className="w-4 h-4" />}
                       onClick={() => openModal('new-recipe')}
                     >
-                      Add Recipe
+                      {t('book.addRecipe')}
                     </Button>
                   )}
                 </Card>
@@ -366,7 +369,7 @@ export function BookPage() {
                     : 'bg-crumb-200 dark:bg-crust-700 text-crust-600 dark:text-crumb-300'
                 }`}
               >
-                All Bakes
+                {t('book.filterAllBakes')}
               </button>
               <button
                 onClick={() => setBakesFilter('favorites')}
@@ -376,7 +379,7 @@ export function BookPage() {
                     : 'bg-crumb-200 dark:bg-crust-700 text-crust-600 dark:text-crumb-300'
                 }`}
               >
-                Favorites
+                {t('book.filterFavorites')}
               </button>
               {bakes.length >= 2 && (
                 <button
@@ -387,21 +390,21 @@ export function BookPage() {
                       : 'bg-crumb-200 dark:bg-crust-700 text-crust-600 dark:text-crumb-300'
                   }`}
                 >
-                  {compareMode ? 'Done' : 'Compare'}
+                  {compareMode ? t('common.done') : t('book.compare')}
                 </button>
               )}
             </div>
 
             {compareMode && (
               <p className="text-xs text-crust-500 dark:text-crumb-500 mb-2">
-                Select two or more bakes to compare.
+                {t('book.compareHint')}
               </p>
             )}
 
             {/* Journal search */}
             <div className="mb-2">
               <Input
-                placeholder="Search bakes, notes, tags…"
+                placeholder={t('book.searchBakesPlaceholder')}
                 value={journalSearch}
                 onChange={(e) => setJournalSearch(e.target.value)}
                 leftIcon={<Search className="w-4 h-4" />}
@@ -419,7 +422,7 @@ export function BookPage() {
                       : 'bg-crumb-200 dark:bg-crust-700 text-crust-600 dark:text-crumb-300'
                   }`}
                 >
-                  All tags
+                  {t('book.allTags')}
                 </button>
                 {allTags.map((tag) => (
                   <button
@@ -449,7 +452,7 @@ export function BookPage() {
               {bakes.length}
             </p>
             <p className="text-xs text-crust-500 dark:text-crumb-500">
-              Total Bakes
+              {t('book.statTotalBakes')}
             </p>
           </Card>
           <Card padding="sm" className="text-center">
@@ -461,7 +464,7 @@ export function BookPage() {
                 : '0'}
             </p>
             <p className="text-xs text-crust-500 dark:text-crumb-500">
-              Avg Rating
+              {t('book.statAvgRating')}
             </p>
           </Card>
           <Card padding="sm" className="text-center">
@@ -469,7 +472,7 @@ export function BookPage() {
               {bakes.filter((b) => b.isFavorite).length}
             </p>
             <p className="text-xs text-crust-500 dark:text-crumb-500">
-              Favorites
+              {t('book.filterFavorites')}
             </p>
           </Card>
         </motion.div>
@@ -546,7 +549,7 @@ export function BookPage() {
                         <Calendar className="w-3 h-3" />
                         {format(new Date(bake.date), 'MMM d')}
                       </span>
-                      <span>{bake.ingredients.hydration}% hydration</span>
+                      <span>{t('book.hydrationLabel', { value: bake.ingredients.hydration })}</span>
                     </div>
 
                     {bake.tags.length > 0 && (
@@ -575,10 +578,10 @@ export function BookPage() {
               <Search className="w-8 h-8 text-crust-500 dark:text-crumb-400" />
             </div>
             <h3 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-2">
-              No matching bakes
+              {t('book.noMatchingBakes')}
             </h3>
             <p className="text-crust-600 dark:text-crumb-400 mb-4">
-              Try a different search or tag.
+              {t('book.noMatchingBakesHint')}
             </p>
             <Button
               variant="secondary"
@@ -587,7 +590,7 @@ export function BookPage() {
                 setSelectedTag(null);
               }}
             >
-              Clear filters
+              {t('book.clearFilters')}
             </Button>
           </Card>
         </motion.div>
@@ -601,16 +604,16 @@ export function BookPage() {
               <BookOpen className="w-8 h-8 text-crust-500 dark:text-crumb-400" />
             </div>
             <h3 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-2">
-              No bakes logged yet
+              {t('book.noBakesYet')}
             </h3>
             <p className="text-crust-600 dark:text-crumb-400 mb-4">
-              Start tracking your bakes to see patterns and improve
+              {t('book.noBakesYetHint')}
             </p>
             <Button
               leftIcon={<Plus className="w-4 h-4" />}
               onClick={() => openModal('start-bake')}
             >
-              Log Your First Bake
+              {t('book.logFirstBake')}
             </Button>
           </Card>
         </motion.div>
@@ -629,7 +632,7 @@ export function BookPage() {
               exitCompareMode();
             }}
           >
-            Compare {selectedForCompare.length} bakes
+            {t('book.compareCount', { count: selectedForCompare.length })}
           </Button>
         </div>
       )}

@@ -542,10 +542,13 @@ export interface Settings {
   value: unknown;
 }
 
+export type Language = 'en' | 'da';
+
 export interface UserSettings {
   units: 'metric' | 'imperial';
   temperatureUnit: 'celsius' | 'fahrenheit';
   timeFormat: '12h' | '24h';
+  language: Language;
   defaultHydration: number;
   defaultStarterPercent: number;
   defaultSaltPercent: number;
@@ -564,6 +567,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   units: 'metric',
   temperatureUnit: 'celsius',
   timeFormat: '24h',
+  language: 'en',
   defaultHydration: 75,
   defaultStarterPercent: 20,
   defaultSaltPercent: 2,

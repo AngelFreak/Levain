@@ -14,9 +14,11 @@ import { db } from '../lib/db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { ActiveTimeline } from '../types';
 import { formatDistanceToNow } from 'date-fns';
+import { useTranslation } from '../lib/i18n/useTranslation';
 
 export function HomePage() {
   const { setActiveTab, openModal, navigateTo } = useAppStore();
+  const { t } = useTranslation();
 
   // Use live queries for reactive data
   // Note: Dexie doesn't support boolean index queries, using filter
@@ -57,13 +59,13 @@ export function HomePage() {
               Levain
             </h1>
             <p className="text-crust-600 dark:text-crumb-400 mt-1">
-              Your sourdough companion
+              {t('home.subtitle')}
             </p>
           </div>
         </div>
         <button
           onClick={() => setActiveTab('settings')}
-          aria-label="Open settings"
+          aria-label={t('home.openSettings')}
           className="w-10 h-10 rounded-full bg-crumb-100 dark:bg-crust-800 text-crust-600 dark:text-crumb-400 flex items-center justify-center"
         >
           <Settings className="w-5 h-5" />
@@ -91,13 +93,18 @@ export function HomePage() {
                   <div className="flex items-center gap-2 mb-2">
                     <Timer className="w-4 h-4" />
                     <span className="text-xs font-medium uppercase tracking-wide opacity-90">
-                      {activeTimelines.length > 1 ? `Active Bake ${index + 1}` : 'Active Bake'}
+                      {activeTimelines.length > 1
+                        ? t('home.activeBakeNumbered', { number: index + 1 })
+                        : t('home.activeBake')}
                     </span>
                   </div>
                   <h3 className="text-lg font-semibold mb-1">{timeline.name}</h3>
                   <div className="flex items-center gap-4 text-sm opacity-90">
                     <span>
-                      Step {timeline.currentStepIndex + 1} of {timeline.steps.length}
+                      {t('home.stepOfTotal', {
+                        current: timeline.currentStepIndex + 1,
+                        total: timeline.steps.length,
+                      })}
                     </span>
                     <ChevronRight className="w-4 h-4" />
                   </div>
@@ -135,8 +142,8 @@ export function HomePage() {
               <ChefHat className="w-7 h-7" />
             </div>
             <div className="flex-1">
-              <h3 className="text-lg font-display font-semibold">Bake</h3>
-              <p className="text-sm opacity-90">Pick a recipe and start</p>
+              <h3 className="text-lg font-display font-semibold">{t('home.bake')}</h3>
+              <p className="text-sm opacity-90">{t('home.bakeSubtitle')}</p>
             </div>
             <ChevronRight className="w-6 h-6 opacity-80" />
           </div>
@@ -152,13 +159,13 @@ export function HomePage() {
       >
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100">
-            Your Starters
+            {t('home.yourStarters')}
           </h2>
           <button
             onClick={() => setActiveTab('starters')}
             className="text-sm text-crust-600 dark:text-crumb-400 flex items-center gap-1"
           >
-            View all <ChevronRight className="w-4 h-4" />
+            {t('home.viewAll')} <ChevronRight className="w-4 h-4" />
           </button>
         </div>
 
@@ -176,8 +183,10 @@ export function HomePage() {
                     </h3>
                     <p className="text-sm text-crust-500 dark:text-crumb-500">
                       {starter.lastFed
-                        ? `Fed ${formatDistanceToNow(new Date(starter.lastFed))} ago`
-                        : 'Not fed yet'}
+                        ? t('home.fedAgo', {
+                            time: formatDistanceToNow(new Date(starter.lastFed)),
+                          })
+                        : t('home.notFedYet')}
                     </p>
                   </div>
                   <div className="text-right">
@@ -201,14 +210,14 @@ export function HomePage() {
           <Card padding="md" className="text-center">
             <Beaker className="w-8 h-8 mx-auto mb-2 text-crumb-400" />
             <p className="text-crust-600 dark:text-crumb-400 mb-3">
-              No starters yet
+              {t('home.noStartersYet')}
             </p>
             <Button
               size="sm"
               leftIcon={<Plus className="w-4 h-4" />}
               onClick={() => openModal('new-starter')}
             >
-              Add Starter
+              {t('home.addStarter')}
             </Button>
           </Card>
         )}
@@ -222,13 +231,13 @@ export function HomePage() {
       >
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100">
-            Recent Bakes
+            {t('home.recentBakes')}
           </h2>
           <button
             onClick={() => setActiveTab('book')}
             className="text-sm text-crust-600 dark:text-crumb-400 flex items-center gap-1"
           >
-            View all <ChevronRight className="w-4 h-4" />
+            {t('home.viewAll')} <ChevronRight className="w-4 h-4" />
           </button>
         </div>
 
@@ -253,7 +262,9 @@ export function HomePage() {
                       {bake.recipeName}
                     </h3>
                     <p className="text-sm text-crust-500 dark:text-crumb-500">
-                      {formatDistanceToNow(new Date(bake.date))} ago
+                      {t('home.timeAgo', {
+                        time: formatDistanceToNow(new Date(bake.date)),
+                      })}
                     </p>
                   </div>
                   <div className="flex items-center gap-1 text-honey-500">
@@ -270,7 +281,7 @@ export function HomePage() {
           <Card padding="md" className="text-center">
             <Clock className="w-8 h-8 mx-auto mb-2 text-crumb-400" />
             <p className="text-crust-600 dark:text-crumb-400">
-              No bakes logged yet. Start your first bake!
+              {t('home.noBakesYet')}
             </p>
           </Card>
         )}

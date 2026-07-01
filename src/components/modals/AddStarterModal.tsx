@@ -3,6 +3,7 @@ import { Beaker } from 'lucide-react';
 import { Button, Input, BottomSheet, DateField, toDateInputValue, fromDateInputValue } from '../ui';
 import { db } from '../../lib/db';
 import { useAppStore } from '../../stores/appStore';
+import { useTranslation } from '../../lib/i18n/useTranslation';
 
 interface AddStarterModalProps {
   isOpen: boolean;
@@ -11,6 +12,7 @@ interface AddStarterModalProps {
 
 export function AddStarterModal({ isOpen, onClose }: AddStarterModalProps) {
   const { showToast } = useAppStore();
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [flourType, setFlourType] = useState('white');
   const [hydration, setHydration] = useState('100');
@@ -20,23 +22,23 @@ export function AddStarterModal({ isOpen, onClose }: AddStarterModalProps) {
   const today = toDateInputValue(new Date());
 
   const flourOptions = [
-    { value: 'white', label: 'White (AP/Bread)' },
-    { value: 'whole-wheat', label: 'Whole Wheat' },
-    { value: 'rye', label: 'Rye' },
-    { value: 'spelt', label: 'Spelt' },
-    { value: 'mixed', label: 'Mixed' },
+    { value: 'white', label: t('addStarter.flourWhite') },
+    { value: 'whole-wheat', label: t('addStarter.flourWholeWheat') },
+    { value: 'rye', label: t('addStarter.flourRye') },
+    { value: 'spelt', label: t('addStarter.flourSpelt') },
+    { value: 'mixed', label: t('addStarter.flourMixed') },
   ];
 
   const hydrationOptions = [
-    { value: '50', label: '50% (Stiff)' },
-    { value: '65', label: '65% (Medium-Stiff)' },
-    { value: '100', label: '100% (Standard)' },
-    { value: '125', label: '125% (Liquid)' },
+    { value: '50', label: t('addStarter.hydrationStiff') },
+    { value: '65', label: t('addStarter.hydrationMediumStiff') },
+    { value: '100', label: t('addStarter.hydrationStandard') },
+    { value: '125', label: t('addStarter.hydrationLiquid') },
   ];
 
   const handleSubmit = async () => {
     if (!name.trim()) {
-      showToast('Please enter a name for your starter', 'error');
+      showToast(t('addStarter.errorNameRequired'), 'error');
       return;
     }
 
@@ -53,10 +55,10 @@ export function AddStarterModal({ isOpen, onClose }: AddStarterModalProps) {
         notes: '',
       });
 
-      showToast(`${name} has been added!`, 'success');
+      showToast(t('addStarter.successAdded', { name }), 'success');
       handleClose();
     } catch (error) {
-      showToast('Failed to add starter', 'error');
+      showToast(t('addStarter.errorAddFailed'), 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -71,7 +73,7 @@ export function AddStarterModal({ isOpen, onClose }: AddStarterModalProps) {
   };
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={handleClose} title="Add New Starter">
+    <BottomSheet isOpen={isOpen} onClose={handleClose} title={t('addStarter.title')}>
       <div className="space-y-5">
         {/* Icon header */}
         <div className="flex justify-center">
@@ -82,8 +84,8 @@ export function AddStarterModal({ isOpen, onClose }: AddStarterModalProps) {
 
         {/* Form fields */}
         <Input
-          label="Starter Name"
-          placeholder="e.g., Bubbles, Old Faithful"
+          label={t('addStarter.nameLabel')}
+          placeholder={t('addStarter.namePlaceholder')}
           value={name}
           onChange={(e) => setName(e.target.value)}
           autoFocus
@@ -91,17 +93,17 @@ export function AddStarterModal({ isOpen, onClose }: AddStarterModalProps) {
 
         {/* Date created - when the starter was first made */}
         <DateField
-          label="Date Created"
+          label={t('addStarter.dateCreatedLabel')}
           value={createdDate}
           onChange={setCreatedDate}
           max={today}
-          hint="When you first made this starter"
+          hint={t('addStarter.dateCreatedHint')}
         />
 
         {/* Flour Type - Native-style segmented list */}
         <div>
           <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">
-            Primary Flour Type
+            {t('addStarter.flourTypeLabel')}
           </label>
           <div className="bg-surface1 dark:bg-surfaceDark1 rounded-xl border border-crumb-300/50 dark:border-crust-600/50 overflow-hidden">
             {flourOptions.map((option, index) => (
@@ -140,7 +142,7 @@ export function AddStarterModal({ isOpen, onClose }: AddStarterModalProps) {
         {/* Hydration - Native-style segmented list */}
         <div>
           <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">
-            Hydration Level
+            {t('addStarter.hydrationLabel')}
           </label>
           <div className="bg-surface1 dark:bg-surfaceDark1 rounded-xl border border-crumb-300/50 dark:border-crust-600/50 overflow-hidden">
             {hydrationOptions.map((option, index) => (
@@ -183,14 +185,14 @@ export function AddStarterModal({ isOpen, onClose }: AddStarterModalProps) {
             onClick={handleClose}
             className="flex-1"
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             onClick={handleSubmit}
             isLoading={isSubmitting}
             className="flex-1"
           >
-            Add Starter
+            {t('addStarter.submitButton')}
           </Button>
         </div>
       </div>

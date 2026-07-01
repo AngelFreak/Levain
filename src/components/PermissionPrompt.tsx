@@ -2,6 +2,7 @@ import { Bell, Timer } from 'lucide-react';
 import { BottomSheet, Button } from './ui';
 import { requestNotificationPermission, markPermissionPromptShown } from '../lib/permissions';
 import { useAppStore } from '../stores/appStore';
+import { useTranslation } from '../lib/i18n/useTranslation';
 
 interface PermissionPromptProps {
   isOpen: boolean;
@@ -10,15 +11,16 @@ interface PermissionPromptProps {
 
 export function PermissionPrompt({ isOpen, onClose }: PermissionPromptProps) {
   const { showToast } = useAppStore();
+  const { t } = useTranslation();
 
   const handleEnable = async () => {
     markPermissionPromptShown();
     const granted = await requestNotificationPermission();
 
     if (granted) {
-      showToast('Notifications enabled!', 'success');
+      showToast(t('permission.toastEnabled'), 'success');
     } else {
-      showToast('Notifications disabled. You can enable them in Settings.', 'info');
+      showToast(t('permission.toastDisabled'), 'info');
     }
     onClose();
   };
@@ -29,7 +31,7 @@ export function PermissionPrompt({ isOpen, onClose }: PermissionPromptProps) {
   };
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={handleSkip} title="Stay on Track">
+    <BottomSheet isOpen={isOpen} onClose={handleSkip} title={t('permission.title')}>
       <div className="space-y-6">
         {/* Hero illustration */}
         <div className="flex justify-center">
@@ -46,10 +48,10 @@ export function PermissionPrompt({ isOpen, onClose }: PermissionPromptProps) {
         {/* Benefits */}
         <div className="text-center space-y-2">
           <h3 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100">
-            Never Miss a Step
+            {t('permission.heading')}
           </h3>
           <p className="text-sm text-crust-600 dark:text-crumb-400">
-            Get reminders for starter feedings and bake timers so your bread turns out perfect every time.
+            {t('permission.description')}
           </p>
         </div>
 
@@ -57,26 +59,26 @@ export function PermissionPrompt({ isOpen, onClose }: PermissionPromptProps) {
         <div className="space-y-3">
           <FeatureItem
             icon={<Timer className="w-5 h-5 text-honey-600 dark:text-honey-400" />}
-            title="Bake Timers"
-            description="Alerts for each step: autolyse, folds, shaping, and baking"
+            title={t('permission.bakeTimersTitle')}
+            description={t('permission.bakeTimersDescription')}
           />
           <FeatureItem
             icon={<Bell className="w-5 h-5 text-honey-600 dark:text-honey-400" />}
-            title="Feeding Reminders"
-            description="Keep your starter healthy with scheduled feeding alerts"
+            title={t('permission.feedingRemindersTitle')}
+            description={t('permission.feedingRemindersDescription')}
           />
         </div>
 
         {/* Actions */}
         <div className="flex flex-col gap-3 pt-2">
           <Button onClick={handleEnable} fullWidth>
-            Enable Notifications
+            {t('permission.enableButton')}
           </Button>
           <button
             onClick={handleSkip}
             className="text-sm text-crust-500 dark:text-crumb-500 hover:text-crust-700 dark:hover:text-crumb-300 py-2"
           >
-            Maybe Later
+            {t('permission.maybeLater')}
           </button>
         </div>
       </div>

@@ -461,7 +461,30 @@ formatting stays metric-first.
 **Tests:** locale switch updates copy app-wide; no missing-key fallbacks on core
 screens.
 
-**Status:** Not Started
+**Status:** Complete — in-house i18n layer in `src/lib/i18n/` (NO new dependency,
+per the "don't add tools" guideline): `en.ts` is the typed source of truth (996
+keys) and defines `TranslationKey`, so every `t('…')` is compile-checked and a
+missing key is a build error; `da.ts` is a full Danish catalog (996 keys, parity)
+that falls back to `en` per key. `index.ts` exposes `translate()` with `{var}`
+interpolation + `LANGUAGES`; `useTranslation()` binds `t` to the `language` slice
+of the settings store so a locale change re-renders reactively (no reload).
+`format.ts` keeps date/time/number formatting locale-aware but METRIC-FIRST —
+switching language never changes units (°C/g stay). Added `language: 'en' | 'da'`
+to `UserSettings` (default en) + a Settings selector showing native names.
+Extraction was a parallel fan-out: a Workflow ran 21 agents (one per page/modal),
+each replacing strings with `t('<namespace>.<key>')` in its own file and RETURNING
+its catalog entries; the orchestrator merged all 940 returned keys centrally into
+en.ts/da.ts (serialized to avoid write conflicts) — 0 collisions, 0 used-but-
+undefined after merge (every `t()` call resolves). Foundation surfaces (TabBar,
+App offline/skip, Home, Onboarding) wired by hand first to prove the mechanism.
+Verified live with Playwright (390×844): Home/Calculator/Starters/Book all render
+Danish on switch (e.g. "Beregnere", "Hvornår vil du have brød?", "Køkkentemperatur"),
+0 raw-key leaks on any page, metric units preserved, English restores cleanly.
+tsc clean, build green, eslint unchanged (zero new — proven via `git stash`
+baseline). Data-derived strings (recipe names, fermentation-engine step text) and
+native date/time inputs are intentionally left to their own sources.
+
+**Status:** Complete
 
 ---
 
