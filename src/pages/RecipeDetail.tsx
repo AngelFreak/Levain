@@ -13,19 +13,37 @@ import {
   Pencil,
   Trash2,
   Play,
+  Gauge,
+  Timer,
+  Pizza,
 } from 'lucide-react';
 import { Card, Button } from '../components/ui';
 import { EditRecipeModal } from '../components/modals/EditRecipeModal';
 import { useAppStore } from '../stores/appStore';
 import { db } from '../lib/db';
+import { useTranslation } from '../lib/i18n/useTranslation';
 import type { Recipe } from '../types';
 
 interface RecipeDetailPageProps {
   recipeId: string;
 }
 
+/** Format a step timer (seconds) into a compact human label, metric/24h-friendly. */
+function formatTimer(seconds: number): string {
+  // Keep sub-minute and ragged short timers in seconds so values like a
+  // 90 s pizza bake are preserved exactly rather than rounded to minutes.
+  if (seconds < 120 && seconds % 60 !== 0) return `${seconds} s`;
+  if (seconds < 60) return `${seconds} s`;
+  const totalMinutes = Math.round(seconds / 60);
+  if (totalMinutes < 60) return `${totalMinutes} min`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes > 0 ? `${hours} h ${minutes} min` : `${hours} h`;
+}
+
 export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
   const { goBackFromPage, showToast, navigateTo, openModal } = useAppStore();
+  const { t } = useTranslation();
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -49,9 +67,12 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
       const newFavorite = !recipe.isFavorite;
       await db.recipes.update(recipe.id, { isFavorite: newFavorite });
       setRecipe({ ...recipe, isFavorite: newFavorite });
-      showToast(newFavorite ? 'Added to favorites' : 'Removed from favorites', 'success');
+      showToast(
+        newFavorite ? t('recipeDetail.toast.addedToFavorites') : t('recipeDetail.toast.removedFromFavorites'),
+        'success'
+      );
     } catch (error) {
-      showToast('Failed to update favorite', 'error');
+      showToast(t('recipeDetail.toast.favoriteFailed'), 'error');
     }
   };
 
@@ -63,7 +84,7 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
       const forkedRecipe: Omit<Recipe, 'id'> = {
         ...recipe,
         uuid: newUuid,
-        name: `${recipe.name} (Copy)`,
+        name: t('recipeDetail.copySuffix', { name: recipe.name }),
         isFavorite: false,
         isBuiltIn: false, // Forked recipes are user-owned and editable
         timesUsed: 0,
@@ -72,17 +93,19 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
         updatedAt: now,
         syncedAt: undefined,
         // Clear source attribution for user's copy
-        sourceAttribution: recipe.sourceAttribution ? `Forked from: ${recipe.sourceAttribution}` : undefined,
+        sourceAttribution: recipe.sourceAttribution
+          ? t('recipeDetail.forkedFrom', { source: recipe.sourceAttribution })
+          : undefined,
       };
       // Remove the id so Dexie auto-generates a new one
       delete (forkedRecipe as Recipe).id;
 
       await db.recipes.add(forkedRecipe as Recipe);
-      showToast('Recipe forked! You can now edit your copy.', 'success');
+      showToast(t('recipeDetail.toast.forked'), 'success');
       // Navigate to the new recipe
       navigateTo('recipe-detail', { recipeId: newUuid });
     } catch (error) {
-      showToast('Failed to fork recipe', 'error');
+      showToast(t('recipeDetail.toast.forkFailed'), 'error');
     }
   };
 
@@ -97,10 +120,10 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
     if (!recipe?.id) return;
     try {
       await db.recipes.delete(recipe.id);
-      showToast('Recipe deleted', 'success');
+      showToast(t('recipeDetail.toast.deleted'), 'success');
       goBackFromPage();
     } catch (error) {
-      showToast('Failed to delete recipe', 'error');
+      showToast(t('recipeDetail.toast.deleteFailed'), 'error');
     }
   };
 
@@ -120,10 +143,10 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
     return (
       <div className="min-h-screen px-4 pt-6 pb-24">
         <Button variant="ghost" onClick={goBackFromPage} leftIcon={<ArrowLeft className="w-5 h-5" />}>
-          Back
+          {t('common.back')}
         </Button>
         <div className="text-center py-12">
-          <p className="text-crust-600 dark:text-crumb-400">Recipe not found</p>
+          <p className="text-crust-600 dark:text-crumb-400">{t('recipeDetail.notFound')}</p>
         </div>
       </div>
     );
@@ -140,7 +163,7 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
             onClick={goBackFromPage}
             leftIcon={<ArrowLeft className="w-5 h-5" />}
           >
-            Back
+            {t('common.back')}
           </Button>
           <div className="flex items-center gap-1">
             {/* Edit button - only for user-created recipes */}
@@ -149,7 +172,8 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
                 variant="ghost"
                 size="sm"
                 onClick={() => setIsEditModalOpen(true)}
-                title="Edit recipe"
+                aria-label={t('recipeDetail.editRecipe')}
+                title={t('recipeDetail.editRecipe')}
               >
                 <Pencil className="w-5 h-5" />
               </Button>
@@ -160,7 +184,8 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowDeleteConfirm(true)}
-                title="Delete recipe"
+                aria-label={t('recipeDetail.deleteRecipe')}
+                title={t('recipeDetail.deleteRecipe')}
                 className="text-error-500 hover:text-error-600"
               >
                 <Trash2 className="w-5 h-5" />
@@ -172,7 +197,8 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
                 variant="ghost"
                 size="sm"
                 onClick={forkRecipe}
-                title="Fork recipe to create your own copy"
+                aria-label={t('recipeDetail.forkRecipe')}
+                title={t('recipeDetail.forkRecipeTooltip')}
               >
                 <Copy className="w-5 h-5" />
               </Button>
@@ -181,6 +207,8 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
               variant="ghost"
               size="sm"
               onClick={toggleFavorite}
+              aria-pressed={recipe.isFavorite}
+              aria-label={recipe.isFavorite ? t('recipeDetail.removeFromFavorites') : t('recipeDetail.addToFavorites')}
             >
               <Star className={`w-5 h-5 ${recipe.isFavorite ? 'fill-honey-500 text-honey-500' : ''}`} />
             </Button>
@@ -221,22 +249,22 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
               <div>
                 <Droplets className="w-5 h-5 mx-auto text-blue-500 mb-1" />
                 <p className="text-lg font-semibold text-crust-800 dark:text-crumb-100">{recipe.hydration}%</p>
-                <p className="text-xs text-crust-500 dark:text-crumb-500">Hydration</p>
+                <p className="text-xs text-crust-500 dark:text-crumb-500">{t('recipeDetail.hydration')}</p>
               </div>
               <div>
                 <FlaskConical className="w-5 h-5 mx-auto text-amber-500 mb-1" />
                 <p className="text-lg font-semibold text-crust-800 dark:text-crumb-100">{recipe.starterPercent}%</p>
-                <p className="text-xs text-crust-500 dark:text-crumb-500">Starter</p>
+                <p className="text-xs text-crust-500 dark:text-crumb-500">{t('recipeDetail.starter')}</p>
               </div>
               <div>
                 <Wheat className="w-5 h-5 mx-auto text-honey-500 mb-1" />
                 <p className="text-lg font-semibold text-crust-800 dark:text-crumb-100">{recipe.totalFlour}g</p>
-                <p className="text-xs text-crust-500 dark:text-crumb-500">Flour</p>
+                <p className="text-xs text-crust-500 dark:text-crumb-500">{t('recipeDetail.flour')}</p>
               </div>
               <div>
                 <Clock className="w-5 h-5 mx-auto text-crust-500 mb-1" />
                 <p className="text-sm font-semibold text-crust-800 dark:text-crumb-100">{recipe.timing.handsOnTime}</p>
-                <p className="text-xs text-crust-500 dark:text-crumb-500">Hands-on</p>
+                <p className="text-xs text-crust-500 dark:text-crumb-500">{t('recipeDetail.handsOn')}</p>
               </div>
             </div>
           </Card>
@@ -251,16 +279,81 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
           <Card padding="md" className="bg-honey-50 dark:bg-honey-950/20 border-honey-200 dark:border-honey-800">
             <div className="flex items-center gap-2 mb-2">
               <Clock className="w-4 h-4 text-honey-600" />
-              <span className="font-medium text-honey-800 dark:text-honey-200">Timing</span>
+              <span className="font-medium text-honey-800 dark:text-honey-200">{t('recipeDetail.timing')}</span>
             </div>
             <p className="text-sm text-honey-700 dark:text-honey-300">
-              <span className="font-medium">Total:</span> {recipe.timing.totalTime}
+              <span className="font-medium">{t('recipeDetail.totalLabel')}</span> {recipe.timing.totalTime}
             </p>
             <p className="text-sm text-honey-700 dark:text-honey-300">
-              <span className="font-medium">Best for:</span> {recipe.timing.bestFor}
+              <span className="font-medium">{t('recipeDetail.bestForLabel')}</span> {recipe.timing.bestFor}
             </p>
           </Card>
         </motion.div>
+
+        {/* Yield (portioned doughs, e.g. pizza) */}
+        {recipe.yield && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.12 }}
+          >
+            <Card padding="md">
+              <div className="flex items-center gap-2 mb-3">
+                <Pizza className="w-4 h-4 text-crust-600 dark:text-crumb-400" />
+                <span className="font-medium text-crust-800 dark:text-crumb-100">{t('recipeDetail.yield')}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <p className="text-lg font-semibold text-crust-800 dark:text-crumb-100">{recipe.yield.balls}</p>
+                  <p className="text-xs text-crust-500 dark:text-crumb-500">{t('recipeDetail.doughBalls')}</p>
+                </div>
+                <div>
+                  <p className="text-lg font-semibold text-crust-800 dark:text-crumb-100">{recipe.yield.ballWeightG} g</p>
+                  <p className="text-xs text-crust-500 dark:text-crumb-500">{t('recipeDetail.perBall')}</p>
+                </div>
+                <div>
+                  <p className="text-lg font-semibold text-crust-800 dark:text-crumb-100">{recipe.yield.pizzaDiameterCm} cm</p>
+                  <p className="text-xs text-crust-500 dark:text-crumb-500">{t('recipeDetail.diameter')}</p>
+                </div>
+              </div>
+              {recipe.totalDoughWeight && (
+                <p className="text-xs text-center text-crust-500 dark:text-crumb-500 mt-3">
+                  {t('recipeDetail.totalDough', { weight: recipe.totalDoughWeight })}
+                </p>
+              )}
+            </Card>
+          </motion.div>
+        )}
+
+        {/* Ingredients (weighed list with baker's %) */}
+        {recipe.ingredients && recipe.ingredients.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.14 }}
+          >
+            <h2 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-3">
+              {t('recipeDetail.ingredients')}
+            </h2>
+            <Card padding="md">
+              <div className="space-y-2">
+                {recipe.ingredients.map((ingredient, i) => (
+                  <div key={i} className="flex justify-between items-baseline gap-3">
+                    <span className="text-crust-700 dark:text-crumb-300">{ingredient.name}</span>
+                    <span className="flex items-baseline gap-2 flex-shrink-0">
+                      <span className="font-medium text-crust-800 dark:text-crumb-100">
+                        {ingredient.amount} {ingredient.unit}
+                      </span>
+                      <span className="text-xs text-crust-500 dark:text-crumb-500">
+                        {ingredient.bakersPercent}%
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </motion.div>
+        )}
 
         {/* Flour Breakdown */}
         {recipe.flourBreakdown.length > 0 && (
@@ -270,7 +363,7 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
             transition={{ delay: 0.15 }}
           >
             <h2 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-3">
-              Flour Breakdown
+              {t('recipeDetail.flourBreakdown')}
             </h2>
             <Card padding="md">
               <div className="space-y-2">
@@ -293,7 +386,7 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
             transition={{ delay: 0.2 }}
           >
             <h2 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-3">
-              Additions
+              {t('recipeDetail.additions')}
             </h2>
             <Card padding="md">
               <div className="space-y-2">
@@ -317,7 +410,7 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
           transition={{ delay: 0.25 }}
         >
           <h2 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-3">
-            Method
+            {t('recipeDetail.method')}
           </h2>
           <div className="space-y-3">
             {recipe.method.map((step, i) => (
@@ -331,17 +424,33 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
                     <p className="text-sm text-crust-600 dark:text-crumb-400 mt-1">{step.description}</p>
                     {step.tips && (
                       <p className="text-sm text-honey-600 dark:text-honey-400 mt-2 italic">
-                        Tip: {step.tips}
+                        {t('recipeDetail.tip', { tip: step.tips })}
                       </p>
                     )}
                     <div className="flex gap-4 mt-2 text-xs text-crust-500 dark:text-crumb-500">
                       {step.duration > 0 && (
-                        <span>Active: {step.duration} min</span>
+                        <span>{t('recipeDetail.activeTime', { minutes: step.duration })}</span>
                       )}
                       {step.waitTime > 0 && (
-                        <span>Wait: {step.waitTime} min</span>
+                        <span>{t('recipeDetail.waitTime', { minutes: step.waitTime })}</span>
                       )}
                     </div>
+                    {(step.mixer || step.timerSeconds) && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {step.mixer && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-crust-100 dark:bg-crust-800 text-crust-700 dark:text-crumb-300">
+                            <Gauge className="w-3 h-3" />
+                            {step.mixer.percent}% · {step.mixer.rpm} RPM
+                          </span>
+                        )}
+                        {step.timerSeconds != null && step.timerSeconds > 0 && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-honey-100 dark:bg-honey-950/30 text-honey-700 dark:text-honey-300">
+                            <Timer className="w-3 h-3" />
+                            {formatTimer(step.timerSeconds)}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </Card>
@@ -357,7 +466,7 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
             transition={{ delay: 0.3 }}
           >
             <h2 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-3">
-              Notes
+              {t('recipeDetail.notes')}
             </h2>
             <Card padding="md">
               <p className="text-crust-700 dark:text-crumb-300">{recipe.notes}</p>
@@ -376,7 +485,7 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
             <Card padding="md" className="bg-crumb-100 dark:bg-crust-800">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-crust-500 dark:text-crumb-500">Recipe by</p>
+                  <p className="text-xs text-crust-500 dark:text-crumb-500">{t('recipeDetail.recipeBy')}</p>
                   <p className="font-medium text-crust-700 dark:text-crumb-300">{recipe.sourceAttribution}</p>
                 </div>
                 {recipe.sourceUrl && (
@@ -402,7 +511,7 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
           leftIcon={<Play className="w-5 h-5" />}
           onClick={() => openModal('plan-bake', { recipeId: recipe.uuid })}
         >
-          Bake This Recipe
+          {t('recipeDetail.bakeThisRecipe')}
         </Button>
       </div>
 
@@ -418,15 +527,18 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="recipe-delete-confirm-title"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             className="bg-white dark:bg-crust-900 rounded-2xl p-6 max-w-sm w-full shadow-xl"
           >
-            <h3 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-2">
-              Delete Recipe?
+            <h3 id="recipe-delete-confirm-title" className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-2">
+              {t('recipeDetail.deleteConfirmTitle')}
             </h3>
             <p className="text-crust-600 dark:text-crumb-400 mb-6">
-              Are you sure you want to delete "{recipe.name}"? This action cannot be undone.
+              {t('recipeDetail.deleteConfirmBody', { name: recipe.name })}
             </p>
             <div className="flex gap-3">
               <Button
@@ -434,7 +546,7 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
                 onClick={() => setShowDeleteConfirm(false)}
                 className="flex-1"
               >
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button
                 onClick={() => {
@@ -443,7 +555,7 @@ export function RecipeDetailPage({ recipeId }: RecipeDetailPageProps) {
                 }}
                 className="flex-1 bg-error-500 hover:bg-error-600"
               >
-                Delete
+                {t('common.delete')}
               </Button>
             </div>
           </motion.div>

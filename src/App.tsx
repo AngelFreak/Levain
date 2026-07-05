@@ -4,10 +4,12 @@ import { App as CapApp } from '@capacitor/app';
 import { TabBar } from './components/ui';
 import { AddStarterModal, AddRecipeModal, FeedingModal, StartBakeModal, PlanBakeModal } from './components/modals';
 import { PermissionPrompt } from './components/PermissionPrompt';
+import { Onboarding } from './components/Onboarding';
 import { useAppStore } from './stores/appStore';
 import { useSettingsStore } from './stores/settingsStore';
-import { hasShownPermissionPrompt } from './lib/permissions';
-import { initializeNotifications } from './lib/notifications';
+import { useTranslation } from './lib/i18n/useTranslation';
+import { hasShownPermissionPrompt, hasCompletedOnboarding } from './lib/permissions';
+import { initializeNotifications, migrateNotificationScheme, rescheduleFeedingReminder } from './lib/notifications';
 import { DEFAULT_RECIPES } from './data/defaultRecipes';
 import { db, generateUUID } from './lib/db';
 import type { Recipe } from './types';
@@ -17,6 +19,8 @@ import {
   StartersPage,
   StarterDetailPage,
   RecipeDetailPage,
+  BakeDetailPage,
+  BakeComparePage,
   ActiveBakePage,
   BookPage,
   SettingsPage,
@@ -32,9 +36,11 @@ const pages = {
 };
 
 function App() {
-  const { activeTab, activePage, pageData, activeModal, modalData, closeModal, toast, hideToast, isOffline, goBack } = useAppStore();
+  const { activeTab, activePage, pageData, activeModal, modalData, closeModal, toast, hideToast, isOffline, goBack, setActiveTab } = useAppStore();
   const { settings } = useSettingsStore();
+  const { t } = useTranslation();
   const [showPermissionPrompt, setShowPermissionPrompt] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [planBakeRecipe, setPlanBakeRecipe] = useState<import('./types').Recipe | null>(null);
 
   // Fetch recipe when plan-bake modal opens
@@ -53,19 +59,42 @@ function App() {
     }
   }, [activeModal, modalData]);
 
-  // Initialize notifications on app startup
+  // Initialize notifications on app startup, then migrate the notification-ID
+  // scheme once (cancels stale notifications) and rebuild feeding reminders
+  // from current starter data under the new collision-free IDs.
   useEffect(() => {
-    initializeNotifications();
+    const run = async () => {
+      await initializeNotifications();
+      const migrated = await migrateNotificationScheme();
+      if (migrated && settings.notificationsEnabled) {
+        const starters = await db.starters.toArray();
+        for (const starter of starters) {
+          await rescheduleFeedingReminder(
+            starter,
+            settings.feedingRemindersEnabled,
+            settings.feedingReminderHours
+          );
+        }
+      }
+    };
+    run();
+    // Runs once on mount; settings are read at run time. Intentionally not
+    // re-running on settings changes (migration is one-shot, guarded by a flag).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Check for first launch permission prompt
+  // First-launch flow. A fresh install (no onboarding flag) gets the onboarding
+  // walkthrough, which handles notification permission itself. Existing users who
+  // predate onboarding but never saw the permission prompt still get the bare
+  // prompt — they don't get onboarding retroactively.
   useEffect(() => {
-    // Small delay to let app render first
     const timer = setTimeout(() => {
-      if (!hasShownPermissionPrompt()) {
+      if (!hasCompletedOnboarding()) {
+        setShowOnboarding(true);
+      } else if (!hasShownPermissionPrompt()) {
         setShowPermissionPrompt(true);
       }
-    }, 1000);
+    }, 600);
     return () => clearTimeout(timer);
   }, []);
 
@@ -75,12 +104,16 @@ function App() {
       try {
         const now = new Date();
 
-        // Create a map of default recipes by name for quick lookup
-        const defaultRecipeMap = new Map(DEFAULT_RECIPES.map(r => [r.name, r]));
+        // Identity key for a recipe: prefer slug (stable), fall back to name
+        // for legacy templates that predate slugs.
+        const keyOf = (r: { slug?: string; name: string }) => r.slug ?? r.name;
 
-        // Clean up ALL duplicate recipes (keep only the first one of each name)
+        // Map of default recipes by their identity key for quick lookup
+        const defaultRecipeMap = new Map(DEFAULT_RECIPES.map(r => [keyOf(r), r]));
+
+        // Clean up ALL duplicate recipes (keep only the first one of each key)
         const allRecipes = await db.recipes.toArray();
-        const seenNames = new Map<string, number>();
+        const seenKeys = new Map<string, number>();
         const duplicateIds: number[] = [];
 
         // Sort by id to keep the oldest (first added) version
@@ -88,18 +121,20 @@ function App() {
 
         for (const recipe of allRecipes) {
           if (recipe.id !== undefined) {
+            const key = keyOf(recipe);
             // For default recipes, keep only one copy and update it
-            const defaultRecipe = defaultRecipeMap.get(recipe.name);
+            const defaultRecipe = defaultRecipeMap.get(key);
             if (defaultRecipe) {
-              if (seenNames.has(recipe.name)) {
+              if (seenKeys.has(key)) {
                 // This is a duplicate - delete it
                 duplicateIds.push(recipe.id);
               } else {
                 // First occurrence - keep it and sync with default template
-                seenNames.set(recipe.name, recipe.id);
-                // Update to ensure isBuiltIn and photo are set
+                seenKeys.set(key, recipe.id);
+                // Update to ensure isBuiltIn, slug and photo are set
                 await db.recipes.update(recipe.id, {
                   isBuiltIn: true,
+                  slug: defaultRecipe.slug ?? recipe.slug,
                   photo: defaultRecipe.photo || recipe.photo,
                 });
               }
@@ -113,9 +148,11 @@ function App() {
           console.log(`Cleaned up ${duplicateIds.length} duplicate recipes`);
         }
 
-        // Now add any missing default recipes
+        // Now add any missing default recipes (idempotent upsert on slug/name)
         for (const template of DEFAULT_RECIPES) {
-          const existing = await db.recipes.where('name').equals(template.name).first();
+          const existing = template.slug
+            ? await db.recipes.filter((r) => r.slug === template.slug).first()
+            : await db.recipes.where('name').equals(template.name).first();
           if (!existing) {
             await db.recipes.add({
               ...template,
@@ -184,7 +221,7 @@ function App() {
         href="#main-content"
         className="skip-to-content"
       >
-        Skip to main content
+        {t('system.skipToContent')}
       </a>
 
       {/* Offline Banner */}
@@ -196,7 +233,7 @@ function App() {
             exit={{ height: 0, opacity: 0 }}
             className="flex-shrink-0 bg-warning-500 text-white text-center text-sm py-2 px-4 overflow-hidden"
           >
-            You're offline. Changes will sync when connected.
+            {t('system.offline')}
           </motion.div>
         )}
       </AnimatePresence>
@@ -219,8 +256,14 @@ function App() {
               {activePage === 'recipe-detail' && (pageData as { recipeId: string })?.recipeId && (
                 <RecipeDetailPage recipeId={(pageData as { recipeId: string }).recipeId} />
               )}
+              {activePage === 'bake-detail' && (pageData as { bakeId: string })?.bakeId && (
+                <BakeDetailPage bakeId={(pageData as { bakeId: string }).bakeId} />
+              )}
+              {activePage === 'bake-compare' && (pageData as { bakeIds: string[] })?.bakeIds && (
+                <BakeComparePage bakeIds={(pageData as { bakeIds: string[] }).bakeIds} />
+              )}
               {activePage === 'active-bake' && (
-                <ActiveBakePage />
+                <ActiveBakePage timelineId={(pageData as { timelineId?: string })?.timelineId} />
               )}
             </motion.main>
           ) : (
@@ -265,7 +308,14 @@ function App() {
         recipe={planBakeRecipe}
       />
 
-      {/* Permission Prompt (first launch only) */}
+      {/* First-run onboarding (fresh install only) */}
+      <Onboarding
+        isOpen={showOnboarding}
+        onClose={() => setShowOnboarding(false)}
+        onImport={() => setActiveTab('settings')}
+      />
+
+      {/* Permission Prompt (existing users who never saw it) */}
       <PermissionPrompt
         isOpen={showPermissionPrompt}
         onClose={() => setShowPermissionPrompt(false)}

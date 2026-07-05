@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Droplet, Thermometer, ChevronDown, ChevronUp } from 'lucide-react';
+import { Droplet, Thermometer, ChevronDown, ChevronUp, Recycle } from 'lucide-react';
 import { Button, NumberInput, BottomSheet, Textarea } from '../ui';
-import { db } from '../../lib/db';
+import { db, recomputeStarterStats, addStarterDiscard } from '../../lib/db';
 import { useAppStore } from '../../stores/appStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { scheduleFeedingReminder } from '../../lib/notifications';
+import { getStorageLocation, getFeedingReminderHours } from '../../lib/storage';
+import { useTranslation } from '../../lib/i18n/useTranslation';
 import type { Feeding } from '../../types';
 
 interface FeedingModalProps {
@@ -15,24 +17,25 @@ interface FeedingModalProps {
 }
 
 const FEEDING_RATIOS = [
-  { value: '1:1:1', label: '1:1:1 (4-6h peak)' },
-  { value: '1:2:2', label: '1:2:2 (6-8h peak)' },
-  { value: '1:3:3', label: '1:3:3 (8-10h peak)' },
-  { value: '1:5:5', label: '1:5:5 (10-14h peak)' },
-  { value: '1:10:10', label: '1:10:10 (16-24h peak)' },
+  { value: '1:1:1', peak: '4-6h' },
+  { value: '1:2:2', peak: '6-8h' },
+  { value: '1:3:3', peak: '8-10h' },
+  { value: '1:5:5', peak: '10-14h' },
+  { value: '1:10:10', peak: '16-24h' },
 ];
 
 const FLOUR_TYPES = [
-  { value: 'white', label: 'White (AP/Bread)' },
-  { value: 'whole-wheat', label: 'Whole Wheat' },
-  { value: 'rye', label: 'Rye' },
-  { value: 'spelt', label: 'Spelt' },
-  { value: 'mixed', label: 'Mixed' },
-];
+  { value: 'white', labelKey: 'feeding.flourWhite' },
+  { value: 'whole-wheat', labelKey: 'feeding.flourWholeWheat' },
+  { value: 'rye', labelKey: 'feeding.flourRye' },
+  { value: 'spelt', labelKey: 'feeding.flourSpelt' },
+  { value: 'mixed', labelKey: 'feeding.flourMixed' },
+] as const;
 
 export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingModalProps) {
   const { showToast } = useAppStore();
   const { settings } = useSettingsStore();
+  const { t } = useTranslation();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form state
@@ -44,6 +47,7 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
   const [flourType, setFlourType] = useState('white');
   const [waterTemp, setWaterTemp] = useState<number | undefined>(undefined);
   const [ambientTemp, setAmbientTemp] = useState<number | undefined>(undefined);
+  const [discardGrams, setDiscardGrams] = useState(0);
   const [notes, setNotes] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -77,9 +81,34 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
     }
   }, [ratio, starterWeight]);
 
+  // Default the discard estimate from the previous feeding: the flour + water
+  // you built last time is roughly what gets discarded when you keep only
+  // `starterWeight` to feed again. The user can override in advanced options.
+  useEffect(() => {
+    if (!selectedStarterId) return;
+    let cancelled = false;
+    db.feedings
+      .where('starterId')
+      .equals(selectedStarterId)
+      .toArray()
+      .then((fs) => {
+        if (cancelled) return;
+        const last = fs.sort(
+          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        )[0];
+        const estimate = last
+          ? Math.round((last.flourWeight ?? 0) + (last.waterWeight ?? 0))
+          : 0;
+        setDiscardGrams(estimate);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedStarterId]);
+
   const handleSubmit = async () => {
     if (!selectedStarterId) {
-      showToast('Please select a starter', 'error');
+      showToast(t('feeding.selectStarterError'), 'error');
       return;
     }
 
@@ -109,7 +138,16 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
         });
       }
 
-      const starterName = starters?.find((s) => s.uuid === selectedStarterId)?.name || 'Starter';
+      // Recompute feeding-derived stats (avg peak, activity) for this starter.
+      await recomputeStarterStats(selectedStarterId);
+
+      // Accumulate discard for the "use your discard" prompt.
+      if (discardGrams > 0) {
+        await addStarterDiscard(selectedStarterId, discardGrams);
+      }
+
+      const starterName =
+        starters?.find((s) => s.uuid === selectedStarterId)?.name || t('feeding.defaultStarterName');
 
       // Schedule feeding reminder if enabled
       if (settings.notificationsEnabled && settings.feedingRemindersEnabled && starter) {
@@ -120,21 +158,28 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
         );
 
         if (reminderResult.success && reminderResult.scheduledTime) {
-          const hours = settings.feedingReminderHours;
-          showToast(`${starterName} fed! Reminder set for ${hours}h.`, 'success');
+          const effectiveHours = getFeedingReminderHours(
+            starter.storageLocation,
+            settings.feedingReminderHours
+          );
+          const interval =
+            getStorageLocation(starter.storageLocation) === 'fridge'
+              ? t('feeding.intervalDays', { count: Math.round(effectiveHours / 24) })
+              : t('feeding.intervalHours', { count: effectiveHours });
+          showToast(t('feeding.fedReminderSet', { name: starterName, interval }), 'success');
         } else if (reminderResult.permissionDenied) {
-          showToast(`${starterName} fed! Enable notifications for reminders.`, 'warning');
+          showToast(t('feeding.fedEnableNotifications', { name: starterName }), 'warning');
         } else {
-          showToast(`${starterName} fed successfully!`, 'success');
+          showToast(t('feeding.fedSuccess', { name: starterName }), 'success');
         }
       } else {
-        showToast(`${starterName} fed successfully!`, 'success');
+        showToast(t('feeding.fedSuccess', { name: starterName }), 'success');
       }
 
       handleClose();
     } catch (error) {
       console.error('Failed to log feeding:', error);
-      showToast('Failed to log feeding', 'error');
+      showToast(t('feeding.logError'), 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -164,7 +209,7 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
         onClick={handleClose}
         className="flex-1"
       >
-        Cancel
+        {t('common.cancel')}
       </Button>
       <Button
         onClick={handleSubmit}
@@ -172,13 +217,13 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
         isLoading={isSubmitting}
         className="flex-1"
       >
-        Log Feeding
+        {t('feeding.logButton')}
       </Button>
     </div>
   );
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={handleClose} title="Feed Starter" footer={footerContent}>
+    <BottomSheet isOpen={isOpen} onClose={handleClose} title={t('feeding.title')} footer={footerContent}>
       <div className="space-y-5">
         {/* Icon header */}
         <div className="flex justify-center">
@@ -191,7 +236,7 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
         {starters && starters.length > 1 && (
           <div>
             <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">
-              Which Starter?
+              {t('feeding.whichStarter')}
             </label>
             <div className="bg-surface1 dark:bg-surfaceDark1 rounded-xl border border-crumb-300/50 dark:border-crust-600/50 overflow-hidden">
               {starters.map((starter, index) => (
@@ -231,7 +276,7 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
         {/* Show selected starter name if only one */}
         {starters?.length === 1 && selectedStarter && (
           <div className="flex items-center gap-2 p-3 bg-surface2 dark:bg-surfaceDark2 rounded-xl">
-            <span className="text-sm text-crust-600 dark:text-crumb-400">Feeding:</span>
+            <span className="text-sm text-crust-600 dark:text-crumb-400">{t('feeding.feedingLabel')}</span>
             <span className="font-medium text-crust-800 dark:text-crumb-100">
               {selectedStarter.name}
             </span>
@@ -241,7 +286,7 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
         {/* Feeding Ratio - Native list style */}
         <div>
           <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">
-            Feeding Ratio
+            {t('feeding.ratioLabel')}
           </label>
           <div className="bg-surface1 dark:bg-surfaceDark1 rounded-xl border border-crumb-300/50 dark:border-crust-600/50 overflow-hidden">
             {FEEDING_RATIOS.map((option, index) => (
@@ -263,7 +308,7 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
                     ? 'text-honey-700 dark:text-honey-400'
                     : 'text-crust-700 dark:text-crumb-200'
                 }`}>
-                  {option.label}
+                  {t('feeding.ratioOption', { ratio: option.value, peak: option.peak })}
                 </span>
                 {ratio === option.value && (
                   <div className="w-5 h-5 rounded-full bg-honey-500 flex items-center justify-center">
@@ -276,7 +321,7 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
             ))}
           </div>
           <p className="text-xs text-crust-500 dark:text-crumb-500 mt-1.5">
-            Starter : Flour : Water
+            {t('feeding.ratioHint')}
           </p>
         </div>
 
@@ -284,7 +329,7 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-4">
             <label className="text-sm font-medium text-crust-700 dark:text-crumb-200 w-16">
-              Starter
+              {t('feeding.starterWeightLabel')}
             </label>
             <div className="flex-1 max-w-[200px]">
               <NumberInput
@@ -299,7 +344,7 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
           </div>
           <div className="flex items-center justify-between gap-4">
             <label className="text-sm font-medium text-crust-700 dark:text-crumb-200 w-16">
-              Flour
+              {t('feeding.flourWeightLabel')}
             </label>
             <div className="flex-1 max-w-[200px]">
               <NumberInput
@@ -314,7 +359,7 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
           </div>
           <div className="flex items-center justify-between gap-4">
             <label className="text-sm font-medium text-crust-700 dark:text-crumb-200 w-16">
-              Water
+              {t('feeding.waterWeightLabel')}
             </label>
             <div className="flex-1 max-w-[200px]">
               <NumberInput
@@ -332,7 +377,7 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
         {/* Flour Type - Native list style */}
         <div>
           <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">
-            Flour Type
+            {t('feeding.flourTypeLabel')}
           </label>
           <div className="bg-surface1 dark:bg-surfaceDark1 rounded-xl border border-crumb-300/50 dark:border-crust-600/50 overflow-hidden">
             {FLOUR_TYPES.map((option, index) => (
@@ -354,7 +399,7 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
                     ? 'text-honey-700 dark:text-honey-400'
                     : 'text-crust-700 dark:text-crumb-200'
                 }`}>
-                  {option.label}
+                  {t(option.labelKey)}
                 </span>
                 {flourType === option.value && (
                   <div className="w-5 h-5 rounded-full bg-honey-500 flex items-center justify-center">
@@ -375,7 +420,7 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
             onClick={() => setShowAdvanced(!showAdvanced)}
             className="flex items-center justify-between w-full py-2 text-sm text-crust-600 dark:text-crumb-400 hover:text-crust-800 dark:hover:text-crumb-200"
           >
-            <span>{showAdvanced ? '− Hide' : '+ Show'} advanced options</span>
+            <span>{showAdvanced ? t('feeding.hideAdvanced') : t('feeding.showAdvanced')}</span>
             {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
 
@@ -387,7 +432,7 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
                   <label className="block text-xs font-medium text-crust-700 dark:text-crumb-200 mb-1">
                     <div className="flex items-center gap-1">
                       <Thermometer className="w-3 h-3" />
-                      Water Temp
+                      {t('feeding.waterTemp')}
                     </div>
                   </label>
                   <NumberInput
@@ -402,7 +447,7 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
                   <label className="block text-xs font-medium text-crust-700 dark:text-crumb-200 mb-1">
                     <div className="flex items-center gap-1">
                       <Thermometer className="w-3 h-3" />
-                      Room Temp
+                      {t('feeding.roomTemp')}
                     </div>
                   </label>
                   <NumberInput
@@ -415,10 +460,31 @@ export function FeedingModal({ isOpen, onClose, preselectedStarterId }: FeedingM
                 </div>
               </div>
 
+              {/* Discard (optional) — accumulates toward the use-it-up prompt */}
+              <div>
+                <label className="block text-xs font-medium text-crust-700 dark:text-crumb-200 mb-1">
+                  <div className="flex items-center gap-1">
+                    <Recycle className="w-3 h-3" />
+                    {t('feeding.discardLabel')}
+                  </div>
+                </label>
+                <NumberInput
+                  value={discardGrams}
+                  onChange={setDiscardGrams}
+                  min={0}
+                  max={2000}
+                  step={10}
+                  unit="g"
+                />
+                <p className="text-[10px] text-crust-500 dark:text-crumb-500 mt-1">
+                  {t('feeding.discardHint')}
+                </p>
+              </div>
+
               {/* Notes */}
               <Textarea
-                label="Notes"
-                placeholder="Any observations..."
+                label={t('feeding.notesLabel')}
+                placeholder={t('feeding.notesPlaceholder')}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={2}

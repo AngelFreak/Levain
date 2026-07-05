@@ -19,7 +19,7 @@ import {
   formatTime,
   formatDate,
 } from '../lib/fermentation';
-import { db } from '../lib/db';
+import { db, getActiveTimelines } from '../lib/db';
 import { useAppStore } from '../stores/appStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import {
@@ -28,6 +28,10 @@ import {
   scheduleTimelineNotifications,
   showPersistentBakeNotification,
 } from '../lib/notifications';
+import { allocateTimelineBaseId } from '../lib/notificationIds';
+import { useTranslation } from '../lib/i18n/useTranslation';
+import { localizeScheduleStep } from '../lib/i18n/scheduleStep';
+import { formatScheduleDate } from '../lib/i18n/format';
 import type {
   ReverseCalculatorOutput,
   ScheduleStep,
@@ -39,13 +43,14 @@ import type {
 type CalculatorTab = 'reverse' | 'bakers' | 'ddt' | 'hydration';
 
 export function CalculatorPage() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<CalculatorTab>('reverse');
 
   const tabs = [
-    { id: 'reverse' as const, label: 'Plan Bake', icon: Sparkles },
-    { id: 'bakers' as const, label: "Baker's %", icon: CalcIcon },
-    { id: 'ddt' as const, label: 'DDT', icon: Thermometer },
-    { id: 'hydration' as const, label: 'Hydration', icon: Droplets },
+    { id: 'reverse' as const, label: t('calculator.tabPlanBake'), icon: Sparkles },
+    { id: 'bakers' as const, label: t('calculator.tabBakersPercent'), icon: CalcIcon },
+    { id: 'ddt' as const, label: t('calculator.tabDdt'), icon: Thermometer },
+    { id: 'hydration' as const, label: t('calculator.tabHydration'), icon: Droplets },
   ];
 
   return (
@@ -57,10 +62,10 @@ export function CalculatorPage() {
         className="mb-6"
       >
         <h1 className="text-2xl font-display font-bold text-crust-800 dark:text-crumb-100">
-          Calculators
+          {t('calculator.title')}
         </h1>
         <p className="text-crust-600 dark:text-crumb-400 mt-1">
-          Precision tools for perfect bread
+          {t('calculator.subtitle')}
         </p>
       </motion.div>
 
@@ -111,6 +116,7 @@ export function CalculatorPage() {
 
 // Reverse Time Calculator (Hero Feature)
 function ReverseTimeCalculator() {
+  const { t } = useTranslation();
   const { showToast, setActiveTab } = useAppStore();
   const { settings } = useSettingsStore();
   const [readyTime, setReadyTime] = useState('18:00');
@@ -162,8 +168,8 @@ function ReverseTimeCalculator() {
       // Convert schedule steps to timeline steps
       const timelineSteps = convertToTimelineSteps(result.schedule);
 
-      // Generate a unique base ID for notifications
-      const baseNotificationId = Date.now();
+      // Allocate a collision-free notification block for this timeline.
+      const baseNotificationId = await allocateTimelineBaseId();
 
       // Create notifications for each step
       const notifications = createStepNotifications(timelineSteps, baseNotificationId);
@@ -185,9 +191,11 @@ function ReverseTimeCalculator() {
       // Save to database
       await db.activeTimelines.add(timeline);
 
-      // Show persistent notification for the active bake
+      // Show persistent notification for the active bake (summarizing the count
+      // if other bakes are already running).
       if (settings.notificationsEnabled) {
-        await showPersistentBakeNotification(timeline.name);
+        const activeCount = await getActiveTimelines().then((a) => a.length);
+        await showPersistentBakeNotification(timeline.name, activeCount);
       }
 
       // Schedule notifications only if user has them enabled in settings
@@ -196,19 +204,19 @@ function ReverseTimeCalculator() {
         const notificationResult = await scheduleTimelineNotifications(notifications, baseNotificationId);
 
         if (notificationResult.permissionDenied) {
-          showToast('Bake started! Enable notifications in settings for reminders.', 'warning');
+          showToast(t('calculator.toastBakeStartedEnableNotifications'), 'warning');
         } else {
-          showToast('Bake started! You\'ll be notified for each step.', 'success');
+          showToast(t('calculator.toastBakeStartedNotified'), 'success');
         }
       } else {
-        showToast('Bake started! Enable notifications in settings for reminders.', 'info');
+        showToast(t('calculator.toastBakeStartedEnableNotifications'), 'info');
       }
 
       // Navigate to home to see the active bake
       setActiveTab('home');
     } catch (error) {
       console.error('Failed to start bake:', error);
-      showToast('Failed to start bake', 'error');
+      showToast(t('calculator.toastBakeStartFailed'), 'error');
     } finally {
       setIsStarting(false);
     }
@@ -218,15 +226,15 @@ function ReverseTimeCalculator() {
     <div className="space-y-6">
       <Card variant="elevated" padding="lg">
         <CardHeader
-          title="When do you want bread?"
-          subtitle="We'll plan the perfect schedule"
+          title={t('calculator.reverseTitle')}
+          subtitle={t('calculator.reverseSubtitle')}
         />
         <CardContent className="space-y-6">
           {/* Date & Time */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-1.5">
-                Date
+                {t('calculator.dateLabel')}
               </label>
               <input
                 type="date"
@@ -237,7 +245,7 @@ function ReverseTimeCalculator() {
             </div>
             <div>
               <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-1.5">
-                Time
+                {t('calculator.timeLabel')}
               </label>
               <input
                 type="time"
@@ -250,7 +258,7 @@ function ReverseTimeCalculator() {
 
           {/* Temperature */}
           <Slider
-            label="Kitchen Temperature"
+            label={t('calculator.kitchenTemperature')}
             value={temperature}
             onChange={setTemperature}
             min={15}
@@ -266,7 +274,7 @@ function ReverseTimeCalculator() {
           {/* Bake Type Toggle */}
           <div>
             <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">
-              What are you baking?
+              {t('calculator.whatAreYouBaking')}
             </label>
             <div className="flex gap-2">
               <button
@@ -278,7 +286,7 @@ function ReverseTimeCalculator() {
                 }`}
               >
                 <ChefHat className="w-4 h-4" />
-                <span className="text-sm font-medium">Bread</span>
+                <span className="text-sm font-medium">{t('calculator.bakeTypeBread')}</span>
               </button>
               <button
                 onClick={() => setBakeType('rolls')}
@@ -289,7 +297,7 @@ function ReverseTimeCalculator() {
                 }`}
               >
                 <Flame className="w-4 h-4" />
-                <span className="text-sm font-medium">Rolls</span>
+                <span className="text-sm font-medium">{t('calculator.bakeTypeRolls')}</span>
               </button>
             </div>
           </div>
@@ -306,14 +314,14 @@ function ReverseTimeCalculator() {
               <div className="flex items-center gap-2">
                 <Snowflake className="w-4 h-4 text-blue-500" />
                 <span className="text-crust-700 dark:text-crumb-200">
-                  Include cold retard (fridge proof)
+                  {t('calculator.includeColdRetard')}
                 </span>
               </div>
             </label>
             {includeColdRetard && (
               <div className="ml-8">
                 <Slider
-                  label="Cold Retard Duration"
+                  label={t('calculator.coldRetardDuration')}
                   value={coldRetardDuration}
                   onChange={setColdRetardDuration}
                   min={4}
@@ -333,7 +341,7 @@ function ReverseTimeCalculator() {
               className="w-5 h-5 rounded border-crumb-300 text-crust-600 focus:ring-crust-500"
             />
             <span className="text-crust-700 dark:text-crumb-200">
-              Keep night free (23:00–07:00)
+              {t('calculator.keepNightFree', { range: '23:00–07:00' })}
             </span>
           </label>
 
@@ -342,7 +350,7 @@ function ReverseTimeCalculator() {
             onClick={() => setShowAdvanced(!showAdvanced)}
             className="text-sm text-crust-600 dark:text-crumb-400 hover:text-crust-800 dark:hover:text-crumb-200"
           >
-            {showAdvanced ? '− Hide' : '+ Show'} advanced options
+            {showAdvanced ? t('calculator.hideAdvancedOptions') : t('calculator.showAdvancedOptions')}
           </button>
 
           {/* Advanced Options */}
@@ -355,36 +363,36 @@ function ReverseTimeCalculator() {
             >
               <div>
                 <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-1.5">
-                  Flour Type
+                  {t('calculator.flourTypeLabel')}
                 </label>
                 <BottomSheetSelect
                   value={flourType}
                   onChange={(v) => setFlourType(v as FlourType)}
-                  title="Flour Type"
+                  title={t('calculator.flourTypeLabel')}
                   options={[
-                    { value: 'bread', label: 'Bread Flour' },
-                    { value: 'allpurpose', label: 'All-Purpose' },
-                    { value: 'wholewheat', label: 'Whole Wheat' },
-                    { value: 'rye', label: 'Rye' },
-                    { value: 'mixed', label: 'Mixed' },
+                    { value: 'bread', label: t('calculator.flourTypeBread') },
+                    { value: 'allpurpose', label: t('calculator.flourTypeAllPurpose') },
+                    { value: 'wholewheat', label: t('calculator.flourTypeWholeWheat') },
+                    { value: 'rye', label: t('calculator.flourTypeRye') },
+                    { value: 'mixed', label: t('calculator.flourTypeMixed') },
                   ]}
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-1.5">
-                  Starter Strength
+                  {t('calculator.starterStrengthLabel')}
                 </label>
                 <BottomSheetSelect
                   value={starterStrength}
                   onChange={(v) => setStarterStrength(v as StarterStrength)}
-                  title="Starter Strength"
+                  title={t('calculator.starterStrengthLabel')}
                   options={[
-                    { value: 'weak', label: 'Weak (new or neglected)' },
-                    { value: 'developing', label: 'Developing' },
-                    { value: 'normal', label: 'Normal (healthy)' },
-                    { value: 'strong', label: 'Strong' },
-                    { value: 'vigorous', label: 'Vigorous (fed twice daily)' },
+                    { value: 'weak', label: t('calculator.starterStrengthWeak') },
+                    { value: 'developing', label: t('calculator.starterStrengthDeveloping') },
+                    { value: 'normal', label: t('calculator.starterStrengthNormal') },
+                    { value: 'strong', label: t('calculator.starterStrengthStrong') },
+                    { value: 'vigorous', label: t('calculator.starterStrengthVigorous') },
                   ]}
                 />
               </div>
@@ -397,7 +405,7 @@ function ReverseTimeCalculator() {
                   className="w-5 h-5 rounded border-crumb-300 text-crust-600 focus:ring-crust-500"
                 />
                 <span className="text-crust-700 dark:text-crumb-200">
-                  Include autolyse step
+                  {t('calculator.includeAutolyse')}
                 </span>
               </label>
             </motion.div>
@@ -406,7 +414,7 @@ function ReverseTimeCalculator() {
       </Card>
 
       <Button fullWidth size="lg" onClick={handleCalculate}>
-        Generate Schedule
+        {t('calculator.generateSchedule')}
         <ChevronRight className="w-5 h-5" />
       </Button>
 
@@ -438,24 +446,24 @@ function ReverseTimeCalculator() {
               </div>
               <div className="flex-1">
                 <h3 className="font-display font-semibold text-lg text-crust-800 dark:text-crumb-100">
-                  {result.feasible ? 'Schedule Ready!' : 'Not Enough Time'}
+                  {result.feasible ? t('calculator.scheduleReady') : t('calculator.notEnoughTime')}
                 </h3>
                 <p className="text-sm text-crust-600 dark:text-crumb-400 mt-1">
                   {result.feasible
-                    ? `Total time: ${Math.round(result.totalHours)} hours`
-                    : 'Try an earlier date or adjust settings'}
+                    ? t('calculator.totalTimeHours', { hours: Math.round(result.totalHours) })
+                    : t('calculator.tryEarlierDate')}
                 </p>
                 <div className="flex flex-wrap gap-3 mt-3">
                   <div className="flex items-center gap-1.5 text-sm">
                     <ChefHat className="w-4 h-4 text-crust-500" />
                     <span className="text-crust-700 dark:text-crumb-300">
-                      {result.recommendedInoculation}% starter
+                      {t('calculator.recommendedStarterPercent', { percent: result.recommendedInoculation })}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 text-sm">
                     <Flame className="w-4 h-4 text-crust-500" />
                     <span className="text-crust-700 dark:text-crumb-300">
-                      {result.recommendedStarterRatio} ratio
+                      {t('calculator.recommendedRatio', { ratio: result.recommendedStarterRatio })}
                     </span>
                   </div>
                 </div>
@@ -481,7 +489,7 @@ function ReverseTimeCalculator() {
           {result.feasible && (
             <Card padding="lg">
               <h3 className="font-display font-semibold text-crust-800 dark:text-crumb-100 mb-4">
-                Your Schedule
+                {t('calculator.yourSchedule')}
               </h3>
               <div className="space-y-0">
                 {result.schedule.map((step, index) => (
@@ -508,7 +516,7 @@ function ReverseTimeCalculator() {
               disabled={isStarting}
             >
               <Play className="w-5 h-5" />
-              Start This Bake
+              {t('calculator.startThisBake')}
             </Button>
           )}
         </motion.div>
@@ -528,7 +536,10 @@ function ScheduleStepRow({
   isLast: boolean;
   timeFormat: '12h' | '24h';
 }) {
+  const { t, language } = useTranslation();
+  // Priority styling matches on the canonical English name (stable), not display text.
   const isHighPriority = ['Feed Starter', 'Mix Final Dough', 'Pre-Shape', 'Score & Bake (Covered)'].includes(step.step);
+  const local = localizeScheduleStep(step, language);
 
   return (
     <div className="flex gap-3">
@@ -557,10 +568,10 @@ function ScheduleStepRow({
                   : 'text-crust-700 dark:text-crumb-300'
               }`}
             >
-              {step.step}
+              {local.name}
             </h4>
             <p className="text-xs text-crust-500 dark:text-crumb-500 mt-0.5">
-              {step.description}
+              {local.description}
             </p>
           </div>
           <div className="text-right flex-shrink-0 ml-3">
@@ -568,13 +579,13 @@ function ScheduleStepRow({
               {formatTime(step.time, timeFormat)}
             </p>
             <p className="text-xs text-crust-500 dark:text-crumb-500">
-              {formatDate(step.time)}
+              {formatScheduleDate(step.time, language, t)}
             </p>
           </div>
         </div>
-        {step.tips && (
+        {local.tips && (
           <p className="text-xs text-honey-700 dark:text-honey-400 mt-1 italic">
-            {step.tips}
+            {local.tips}
           </p>
         )}
       </div>
@@ -584,6 +595,7 @@ function ScheduleStepRow({
 
 // Baker's Percentage Calculator
 function BakersPercentCalculator() {
+  const { t } = useTranslation();
   const [flour, setFlour] = useState(500);
   const [hydration, setHydration] = useState(75);
   const [starterPercent, setStarterPercent] = useState(20);
@@ -605,13 +617,13 @@ function BakersPercentCalculator() {
     <div className="space-y-6">
       <Card variant="elevated" padding="lg">
         <CardHeader
-          title="Baker's Percentages"
-          subtitle="Calculate ingredient weights"
+          title={t('calculator.bakersPercentagesTitle')}
+          subtitle={t('calculator.bakersPercentagesSubtitle')}
         />
         <CardContent className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-1.5">
-              Base Flour
+              {t('calculator.baseFlour')}
             </label>
             <NumberInput
               value={flour}
@@ -624,7 +636,7 @@ function BakersPercentCalculator() {
           </div>
 
           <Slider
-            label="Hydration"
+            label={t('calculator.hydration')}
             value={hydration}
             onChange={setHydration}
             min={50}
@@ -633,7 +645,7 @@ function BakersPercentCalculator() {
           />
 
           <Slider
-            label="Starter"
+            label={t('calculator.starter')}
             value={starterPercent}
             onChange={setStarterPercent}
             min={5}
@@ -642,7 +654,7 @@ function BakersPercentCalculator() {
           />
 
           <Slider
-            label="Salt"
+            label={t('calculator.salt')}
             value={saltPercent}
             onChange={setSaltPercent}
             min={1}
@@ -652,7 +664,7 @@ function BakersPercentCalculator() {
           />
 
           <Slider
-            label="Starter Hydration"
+            label={t('calculator.starterHydration')}
             value={starterHydration}
             onChange={setStarterHydration}
             min={50}
@@ -665,21 +677,21 @@ function BakersPercentCalculator() {
       {/* Results */}
       <Card padding="lg">
         <h3 className="font-display font-semibold text-crust-800 dark:text-crumb-100 mb-4">
-          Recipe
+          {t('calculator.recipe')}
         </h3>
         <div className="space-y-3">
-          <ResultRow label="Flour" value={`${flour}g`} />
-          <ResultRow label="Water" value={`${Math.round(addedWater)}g`} />
-          <ResultRow label="Starter" value={`${Math.round(starterWeight)}g`} />
-          <ResultRow label="Salt" value={`${salt.toFixed(1)}g`} />
+          <ResultRow label={t('calculator.flour')} value={`${flour}g`} />
+          <ResultRow label={t('calculator.water')} value={`${Math.round(addedWater)}g`} />
+          <ResultRow label={t('calculator.starter')} value={`${Math.round(starterWeight)}g`} />
+          <ResultRow label={t('calculator.salt')} value={`${salt.toFixed(1)}g`} />
           <div className="border-t border-crumb-200 dark:border-crust-800 pt-3 mt-3">
             <ResultRow
-              label="Total Dough"
+              label={t('calculator.totalDough')}
               value={`${Math.round(totalDoughWeight)}g`}
               highlight
             />
             <ResultRow
-              label="True Hydration"
+              label={t('calculator.trueHydration')}
               value={`${trueHydration.toFixed(1)}%`}
             />
           </div>
@@ -691,6 +703,7 @@ function BakersPercentCalculator() {
 
 // DDT Calculator
 function DDTCalculator() {
+  const { t } = useTranslation();
   const [targetTemp, setTargetTemp] = useState(24);
   const [roomTemp, setRoomTemp] = useState(22);
   const [flourTemp, setFlourTemp] = useState(20);
@@ -701,20 +714,20 @@ function DDTCalculator() {
   const waterTemp = targetTemp * 4 - roomTemp - flourTemp - starterTemp - friction;
 
   const warnings: string[] = [];
-  if (waterTemp > 43) warnings.push('Water too hot! May damage yeast.');
-  if (waterTemp < 4) warnings.push('Water too cold. Consider warming flour.');
-  if (waterTemp < 0) warnings.push('Calculation results in impossible water temp.');
+  if (waterTemp > 43) warnings.push(t('calculator.ddtWarningTooHot'));
+  if (waterTemp < 4) warnings.push(t('calculator.ddtWarningTooCold'));
+  if (waterTemp < 0) warnings.push(t('calculator.ddtWarningImpossible'));
 
   return (
     <div className="space-y-6">
       <Card variant="elevated" padding="lg">
         <CardHeader
-          title="Desired Dough Temperature"
-          subtitle="Calculate optimal water temperature"
+          title={t('calculator.ddtTitle')}
+          subtitle={t('calculator.ddtSubtitle')}
         />
         <CardContent className="space-y-5">
           <Slider
-            label="Target Dough Temp"
+            label={t('calculator.targetDoughTemp')}
             value={targetTemp}
             onChange={setTargetTemp}
             min={20}
@@ -723,7 +736,7 @@ function DDTCalculator() {
           />
 
           <Slider
-            label="Room Temperature"
+            label={t('calculator.roomTemperature')}
             value={roomTemp}
             onChange={setRoomTemp}
             min={15}
@@ -732,7 +745,7 @@ function DDTCalculator() {
           />
 
           <Slider
-            label="Flour Temperature"
+            label={t('calculator.flourTemperature')}
             value={flourTemp}
             onChange={setFlourTemp}
             min={10}
@@ -741,7 +754,7 @@ function DDTCalculator() {
           />
 
           <Slider
-            label="Starter Temperature"
+            label={t('calculator.starterTemperature')}
             value={starterTemp}
             onChange={setStarterTemp}
             min={15}
@@ -750,7 +763,7 @@ function DDTCalculator() {
           />
 
           <Slider
-            label="Friction Factor"
+            label={t('calculator.frictionFactor')}
             value={friction}
             onChange={setFriction}
             min={0}
@@ -764,7 +777,7 @@ function DDTCalculator() {
       <Card padding="lg" className={warnings.length > 0 ? 'border-warning-500' : ''}>
         <div className="text-center">
           <p className="text-sm text-crust-600 dark:text-crumb-400 mb-1">
-            Use water at
+            {t('calculator.useWaterAt')}
           </p>
           <p className="text-4xl font-mono font-bold text-crust-800 dark:text-crumb-100">
             {waterTemp.toFixed(1)}°C
@@ -782,6 +795,7 @@ function DDTCalculator() {
 
 // Hydration Calculator
 function HydrationCalculator() {
+  const { t } = useTranslation();
   const [flourWeight, setFlourWeight] = useState(500);
   const [waterWeight, setWaterWeight] = useState(350);
   const [starterWeight, setStarterWeight] = useState(100);
@@ -799,13 +813,13 @@ function HydrationCalculator() {
     <div className="space-y-6">
       <Card variant="elevated" padding="lg">
         <CardHeader
-          title="True Hydration"
-          subtitle="Account for starter contribution"
+          title={t('calculator.trueHydration')}
+          subtitle={t('calculator.hydrationSubtitle')}
         />
         <CardContent className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-1.5">
-              Flour Weight
+              {t('calculator.flourWeight')}
             </label>
             <NumberInput
               value={flourWeight}
@@ -819,7 +833,7 @@ function HydrationCalculator() {
 
           <div>
             <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-1.5">
-              Water Weight
+              {t('calculator.waterWeight')}
             </label>
             <NumberInput
               value={waterWeight}
@@ -833,7 +847,7 @@ function HydrationCalculator() {
 
           <div>
             <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-1.5">
-              Starter Weight
+              {t('calculator.starterWeight')}
             </label>
             <NumberInput
               value={starterWeight}
@@ -846,7 +860,7 @@ function HydrationCalculator() {
           </div>
 
           <Slider
-            label="Starter Hydration"
+            label={t('calculator.starterHydration')}
             value={starterHydration}
             onChange={setStarterHydration}
             min={50}
@@ -861,7 +875,7 @@ function HydrationCalculator() {
         <div className="grid grid-cols-2 gap-4 text-center">
           <div>
             <p className="text-sm text-crust-600 dark:text-crumb-400 mb-1">
-              Apparent
+              {t('calculator.apparent')}
             </p>
             <p className="text-2xl font-mono font-semibold text-crust-700 dark:text-crumb-300">
               {apparentHydration.toFixed(1)}%
@@ -869,7 +883,7 @@ function HydrationCalculator() {
           </div>
           <div>
             <p className="text-sm text-crust-600 dark:text-crumb-400 mb-1">
-              True Hydration
+              {t('calculator.trueHydration')}
             </p>
             <p className="text-2xl font-mono font-bold text-crust-800 dark:text-crumb-100">
               {trueHydration.toFixed(1)}%
@@ -878,8 +892,10 @@ function HydrationCalculator() {
         </div>
         <div className="mt-4 pt-4 border-t border-crumb-200 dark:border-crust-800 text-sm text-crust-600 dark:text-crumb-400">
           <p>
-            Starter adds <strong>{starterFlour.toFixed(0)}g flour</strong> and{' '}
-            <strong>{starterWater.toFixed(0)}g water</strong>
+            {t('calculator.starterAdds', {
+              flour: `${starterFlour.toFixed(0)}g`,
+              water: `${starterWater.toFixed(0)}g`,
+            })}
           </p>
         </div>
       </Card>

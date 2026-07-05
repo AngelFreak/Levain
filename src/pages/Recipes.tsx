@@ -4,24 +4,27 @@ import { Plus, ChefHat, Star, Clock, Droplets, Search } from 'lucide-react';
 import { Card, Button, Input } from '../components/ui';
 import { useAppStore } from '../stores/appStore';
 import { db } from '../lib/db';
+import { useTranslation } from '../lib/i18n/useTranslation';
+import type { TranslationKey } from '../lib/i18n';
 import type { Recipe, RecipeCategory } from '../types';
 
-const CATEGORIES: { id: RecipeCategory | 'all'; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'country_loaf', label: 'Country' },
-  { id: 'buns', label: 'Buns & Rolls' },
-  { id: 'sandwich', label: 'Sandwich' },
-  { id: 'focaccia', label: 'Focaccia' },
-  { id: 'pizza', label: 'Pizza' },
-  { id: 'rye', label: 'Rye Bread' },
-  { id: 'whole_grain', label: 'Whole Grain' },
-  { id: 'enriched', label: 'Enriched' },
-  { id: 'specialty', label: 'Specialty' },
-  { id: 'discard', label: 'Discard' },
+const CATEGORIES: { id: RecipeCategory | 'all'; labelKey: TranslationKey }[] = [
+  { id: 'all', labelKey: 'recipes.categoryAll' },
+  { id: 'country_loaf', labelKey: 'recipes.categoryCountry' },
+  { id: 'buns', labelKey: 'recipes.categoryBuns' },
+  { id: 'sandwich', labelKey: 'recipes.categorySandwich' },
+  { id: 'focaccia', labelKey: 'recipes.categoryFocaccia' },
+  { id: 'pizza', labelKey: 'recipes.categoryPizza' },
+  { id: 'rye', labelKey: 'recipes.categoryRye' },
+  { id: 'whole_grain', labelKey: 'recipes.categoryWholeGrain' },
+  { id: 'enriched', labelKey: 'recipes.categoryEnriched' },
+  { id: 'specialty', labelKey: 'recipes.categorySpecialty' },
+  { id: 'discard', labelKey: 'recipes.categoryDiscard' },
 ];
 
 export function RecipesPage() {
   const { openModal } = useAppStore();
+  const { t } = useTranslation();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -63,10 +66,10 @@ export function RecipesPage() {
       >
         <div>
           <h1 className="text-2xl font-display font-bold text-crust-800 dark:text-crumb-100">
-            Recipes
+            {t('recipes.title')}
           </h1>
           <p className="text-crust-600 dark:text-crumb-400 mt-1">
-            Your bread collection
+            {t('recipes.subtitle')}
           </p>
         </div>
         <Button
@@ -74,7 +77,7 @@ export function RecipesPage() {
           leftIcon={<Plus className="w-4 h-4" />}
           onClick={() => openModal('new-recipe')}
         >
-          Add
+          {t('common.add')}
         </Button>
       </motion.div>
 
@@ -86,7 +89,7 @@ export function RecipesPage() {
         className="mb-4"
       >
         <Input
-          placeholder="Search recipes..."
+          placeholder={t('recipes.searchPlaceholder')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           leftIcon={<Search className="w-4 h-4" />}
@@ -105,7 +108,7 @@ export function RecipesPage() {
                 : 'bg-crumb-100 dark:bg-crust-800 text-crust-700 dark:text-crumb-300'
             }`}
           >
-            {category.label}
+            {t(category.labelKey)}
           </button>
         ))}
       </div>
@@ -155,8 +158,8 @@ export function RecipesPage() {
 
                   {/* Favorite badge */}
                   {recipe.isFavorite && (
-                    <div className="absolute top-2 right-2">
-                      <Star className="w-5 h-5 fill-honey-500 text-honey-500 drop-shadow" />
+                    <div className="absolute top-2 right-2" role="img" aria-label={t('recipes.favorite')}>
+                      <Star className="w-5 h-5 fill-honey-500 text-honey-500 drop-shadow" aria-hidden="true" />
                     </div>
                   )}
                 </div>
@@ -180,7 +183,9 @@ export function RecipesPage() {
 
                   {recipe.timesUsed > 0 && (
                     <p className="text-[10px] text-crust-400 dark:text-crumb-600 mt-2">
-                      Made {recipe.timesUsed} time{recipe.timesUsed > 1 ? 's' : ''}
+                      {recipe.timesUsed === 1
+                        ? t('recipes.madeTimesOne', { count: recipe.timesUsed })
+                        : t('recipes.madeTimesOther', { count: recipe.timesUsed })}
                     </p>
                   )}
                 </div>
@@ -198,19 +203,19 @@ export function RecipesPage() {
               <ChefHat className="w-8 h-8 text-crust-500 dark:text-crumb-400" />
             </div>
             <h3 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-2">
-              {searchQuery ? 'No recipes found' : 'No recipes yet'}
+              {searchQuery ? t('recipes.emptyFoundTitle') : t('recipes.emptyTitle')}
             </h3>
             <p className="text-crust-600 dark:text-crumb-400 mb-4">
               {searchQuery
-                ? 'Try a different search term'
-                : 'Add your favorite bread recipes'}
+                ? t('recipes.emptyFoundBody')
+                : t('recipes.emptyBody')}
             </p>
             {!searchQuery && (
               <Button
                 leftIcon={<Plus className="w-4 h-4" />}
                 onClick={() => openModal('new-recipe')}
               >
-                Add Recipe
+                {t('recipes.addRecipe')}
               </Button>
             )}
           </Card>

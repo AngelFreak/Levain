@@ -7,25 +7,50 @@ import {
   Scale,
   Thermometer,
   Download,
+  Upload,
   Trash2,
   ChevronRight,
   Sparkles,
   Clock,
   BatteryWarning,
+  Image as ImageIcon,
+  Languages,
 } from 'lucide-react';
 import { Card, Input, Slider, BottomSheetSelect, Button } from '../components/ui';
 import { useSettingsStore } from '../stores/settingsStore';
+import { useTranslation } from '../lib/i18n/useTranslation';
+import { LANGUAGES } from '../lib/i18n';
 import { testApiKey } from '../lib/claude';
 import { ConfirmModal } from '../components/ui/Modal';
 import { db } from '../lib/db';
+import {
+  exportAllData,
+  saveAndShareBackup,
+  estimateBackupSize,
+  formatBytes,
+  pickAndReadBackupFile,
+  parseBackup,
+  importAllData,
+  BackupValidationError,
+  type BackupFile,
+  type ImportMode,
+} from '../lib/backup';
+import { useAppStore } from '../stores/appStore';
 import { Capacitor } from '@capacitor/core';
 import BatteryOptimization from '../lib/batteryOptimization';
 import type { UserSettings } from '../types';
 
 export function SettingsPage() {
   const { settings, updateSetting, resetSettings } = useSettingsStore();
+  const { showToast } = useAppStore();
+  const { t } = useTranslation();
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showDeleteDataConfirm, setShowDeleteDataConfirm] = useState(false);
+  const [includePhotos, setIncludePhotos] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
+  // Pending import awaiting a merge/replace choice.
+  const [pendingImport, setPendingImport] = useState<BackupFile | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
   const [keyTest, setKeyTest] = useState<{ status: 'idle' | 'testing' | 'ok' | 'fail'; message?: string }>({
     status: 'idle',
   });
@@ -34,39 +59,64 @@ export function SettingsPage() {
     setKeyTest({ status: 'testing' });
     try {
       await testApiKey();
-      setKeyTest({ status: 'ok', message: 'Key works! AI analysis is ready.' });
+      setKeyTest({ status: 'ok', message: t('settings.keyTestSuccess') });
     } catch (error) {
       const message =
-        error instanceof Error && error.message ? error.message : 'Key check failed.';
+        error instanceof Error && error.message ? error.message : t('settings.keyTestFailed');
       setKeyTest({ status: 'fail', message });
     }
   };
 
   const handleExportData = async () => {
-    const starters = await db.starters.toArray();
-    const feedings = await db.feedings.toArray();
-    const recipes = await db.recipes.toArray();
-    const bakes = await db.bakes.toArray();
+    setIsExporting(true);
+    try {
+      const backup = await exportAllData(includePhotos);
+      const size = estimateBackupSize(backup);
+      const where = await saveAndShareBackup(backup);
+      showToast(`${where} (${formatBytes(size)})`, 'success');
+    } catch (error) {
+      console.error('Export failed:', error);
+      showToast(t('settings.exportFailed'), 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
-    const data = {
-      exportDate: new Date().toISOString(),
-      version: '1.0',
-      starters,
-      feedings,
-      recipes,
-      bakes,
-      settings,
-    };
+  const handlePickImport = async () => {
+    try {
+      const text = await pickAndReadBackupFile();
+      if (!text) return; // cancelled
+      const backup = parseBackup(text);
+      setPendingImport(backup); // opens the merge/replace chooser
+    } catch (error) {
+      const message =
+        error instanceof BackupValidationError
+          ? error.message
+          : t('settings.importReadError');
+      showToast(message, 'error');
+    }
+  };
 
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: 'application/json',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `levain-backup-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const runImport = async (mode: ImportMode) => {
+    if (!pendingImport) return;
+    setIsImporting(true);
+    try {
+      const result = await importAllData(pendingImport, mode);
+      showToast(
+        t('settings.importSuccess', {
+          starters: result.starters,
+          recipes: result.recipes,
+          bakes: result.bakes,
+        }),
+        'success'
+      );
+      setPendingImport(null);
+    } catch (error) {
+      console.error('Import failed:', error);
+      showToast(t('settings.importFailed'), 'error');
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const handleDeleteAllData = async () => {
@@ -88,10 +138,10 @@ export function SettingsPage() {
         className="mb-6"
       >
         <h1 className="text-2xl font-display font-bold text-crust-800 dark:text-crumb-100">
-          Settings
+          {t('settings.title')}
         </h1>
         <p className="text-crust-600 dark:text-crumb-400 mt-1">
-          Customize your experience
+          {t('settings.subtitle')}
         </p>
       </motion.div>
 
@@ -103,23 +153,37 @@ export function SettingsPage() {
           transition={{ delay: 0.05 }}
         >
           <h2 className="text-sm font-medium text-crust-500 dark:text-crumb-500 uppercase tracking-wide mb-3">
-            Appearance
+            {t('settings.appearance')}
           </h2>
           <Card padding="none">
             <SettingRow
               icon={<Moon className="w-5 h-5" />}
-              label="Theme"
-              description="Choose light, dark, or system"
+              label={t('settings.theme')}
+              description={t('settings.themeHint')}
             >
               <BottomSheetSelect
                 value={settings.darkMode}
                 onChange={(value) => updateSetting('darkMode', value as UserSettings['darkMode'])}
-                title="Theme"
+                title={t('settings.theme')}
                 options={[
-                  { value: 'system', label: 'System' },
-                  { value: 'light', label: 'Light' },
-                  { value: 'dark', label: 'Dark' },
+                  { value: 'system', label: t('settings.themeSystem') },
+                  { value: 'light', label: t('settings.themeLight') },
+                  { value: 'dark', label: t('settings.themeDark') },
                 ]}
+              />
+            </SettingRow>
+
+            <SettingRow
+              icon={<Languages className="w-5 h-5" />}
+              label={t('settings.language')}
+              description={t('settings.languageHint')}
+              hasBorder
+            >
+              <BottomSheetSelect
+                value={settings.language}
+                onChange={(value) => updateSetting('language', value as UserSettings['language'])}
+                title={t('settings.language')}
+                options={LANGUAGES.map((l) => ({ value: l.value, label: l.nativeLabel }))}
               />
             </SettingRow>
           </Card>
@@ -132,55 +196,55 @@ export function SettingsPage() {
           transition={{ delay: 0.1 }}
         >
           <h2 className="text-sm font-medium text-crust-500 dark:text-crumb-500 uppercase tracking-wide mb-3">
-            Units & Defaults
+            {t('settings.unitsAndDefaults')}
           </h2>
           <Card padding="none">
             <SettingRow
               icon={<Scale className="w-5 h-5" />}
-              label="Weight Units"
-              description="Grams or ounces"
+              label={t('settings.weightUnits')}
+              description={t('settings.weightUnitsHint')}
             >
               <BottomSheetSelect
                 value={settings.units}
                 onChange={(value) => updateSetting('units', value as UserSettings['units'])}
-                title="Weight Units"
+                title={t('settings.weightUnits')}
                 options={[
-                  { value: 'metric', label: 'Metric (g)' },
-                  { value: 'imperial', label: 'Imperial (oz)' },
+                  { value: 'metric', label: t('settings.weightMetric') },
+                  { value: 'imperial', label: t('settings.weightImperial') },
                 ]}
               />
             </SettingRow>
 
             <SettingRow
               icon={<Thermometer className="w-5 h-5" />}
-              label="Temperature"
-              description="Celsius or Fahrenheit"
+              label={t('settings.temperature')}
+              description={t('settings.temperatureHint')}
               hasBorder
             >
               <BottomSheetSelect
                 value={settings.temperatureUnit}
                 onChange={(value) => updateSetting('temperatureUnit', value as UserSettings['temperatureUnit'])}
-                title="Temperature Unit"
+                title={t('settings.temperatureTitle')}
                 options={[
-                  { value: 'celsius', label: 'Celsius (°C)' },
-                  { value: 'fahrenheit', label: 'Fahrenheit (°F)' },
+                  { value: 'celsius', label: t('settings.tempCelsius') },
+                  { value: 'fahrenheit', label: t('settings.tempFahrenheit') },
                 ]}
               />
             </SettingRow>
 
             <SettingRow
               icon={<Clock className="w-5 h-5" />}
-              label="Time Format"
-              description="12-hour or 24-hour clock"
+              label={t('settings.timeFormat')}
+              description={t('settings.timeFormatHint')}
               hasBorder
             >
               <BottomSheetSelect
                 value={settings.timeFormat}
                 onChange={(value) => updateSetting('timeFormat', value as UserSettings['timeFormat'])}
-                title="Time Format"
+                title={t('settings.timeFormat')}
                 options={[
-                  { value: '24h', label: '24-hour (14:30)' },
-                  { value: '12h', label: '12-hour (2:30 PM)' },
+                  { value: '24h', label: t('settings.time24h') },
+                  { value: '12h', label: t('settings.time12h') },
                 ]}
               />
             </SettingRow>
@@ -194,11 +258,11 @@ export function SettingsPage() {
           transition={{ delay: 0.15 }}
         >
           <h2 className="text-sm font-medium text-crust-500 dark:text-crumb-500 uppercase tracking-wide mb-3">
-            Calculator Defaults
+            {t('settings.calculatorDefaults')}
           </h2>
           <Card padding="md" className="space-y-5">
             <Slider
-              label="Default Hydration"
+              label={t('settings.defaultHydration')}
               value={settings.defaultHydration}
               onChange={(v) => updateSetting('defaultHydration', v)}
               min={50}
@@ -206,7 +270,7 @@ export function SettingsPage() {
               unit="%"
             />
             <Slider
-              label="Default Starter %"
+              label={t('settings.defaultStarterPercent')}
               value={settings.defaultStarterPercent}
               onChange={(v) => updateSetting('defaultStarterPercent', v)}
               min={5}
@@ -214,7 +278,7 @@ export function SettingsPage() {
               unit="%"
             />
             <Slider
-              label="Default Salt %"
+              label={t('settings.defaultSaltPercent')}
               value={settings.defaultSaltPercent}
               onChange={(v) => updateSetting('defaultSaltPercent', v)}
               min={1}
@@ -223,7 +287,7 @@ export function SettingsPage() {
               unit="%"
             />
             <Slider
-              label="Kitchen Temperature"
+              label={t('settings.kitchenTemperature')}
               value={settings.defaultAmbientTemp}
               onChange={(v) => updateSetting('defaultAmbientTemp', v)}
               min={15}
@@ -240,13 +304,13 @@ export function SettingsPage() {
           transition={{ delay: 0.2 }}
         >
           <h2 className="text-sm font-medium text-crust-500 dark:text-crumb-500 uppercase tracking-wide mb-3">
-            Notifications
+            {t('settings.notifications')}
           </h2>
           <Card padding="none">
             <SettingRow
               icon={<Bell className="w-5 h-5" />}
-              label="Push Notifications"
-              description="Enable all notifications"
+              label={t('settings.pushNotifications')}
+              description={t('settings.pushNotificationsHint')}
             >
               <ToggleSwitch
                 checked={settings.notificationsEnabled}
@@ -256,8 +320,8 @@ export function SettingsPage() {
 
             <SettingRow
               icon={<Clock className="w-5 h-5" />}
-              label="Feeding Reminders"
-              description="Get reminded to feed your starter"
+              label={t('settings.feedingReminders')}
+              description={t('settings.feedingRemindersHint')}
               hasBorder
             >
               <ToggleSwitch
@@ -270,18 +334,18 @@ export function SettingsPage() {
             {settings.notificationsEnabled && settings.feedingRemindersEnabled && (
               <div className="px-4 py-3 border-t border-crumb-100 dark:border-crust-800">
                 <label className="text-sm text-crust-600 dark:text-crumb-400 mb-2 block">
-                  Remind me after
+                  {t('settings.remindMeAfter')}
                 </label>
                 <BottomSheetSelect
                   value={String(settings.feedingReminderHours)}
                   onChange={(value) => updateSetting('feedingReminderHours', Number(value))}
-                  title="Reminder Interval"
+                  title={t('settings.reminderInterval')}
                   options={[
-                    { value: '6', label: '6 hours' },
-                    { value: '8', label: '8 hours' },
-                    { value: '12', label: '12 hours (recommended)' },
-                    { value: '24', label: '24 hours' },
-                    { value: '48', label: '48 hours' },
+                    { value: '6', label: t('settings.reminderHours', { hours: 6 }) },
+                    { value: '8', label: t('settings.reminderHours', { hours: 8 }) },
+                    { value: '12', label: t('settings.reminderHoursRecommended', { hours: 12 }) },
+                    { value: '24', label: t('settings.reminderHours', { hours: 24 }) },
+                    { value: '48', label: t('settings.reminderHours', { hours: 48 }) },
                   ]}
                 />
               </div>
@@ -289,8 +353,8 @@ export function SettingsPage() {
 
             <SettingRow
               icon={<Vibrate className="w-5 h-5" />}
-              label="Haptic Feedback"
-              description="Vibration on actions"
+              label={t('settings.hapticFeedback')}
+              description={t('settings.hapticFeedbackHint')}
               hasBorder
             >
               <ToggleSwitch
@@ -318,13 +382,13 @@ export function SettingsPage() {
                   </div>
                   <div className="flex-1">
                     <p className="font-medium text-crust-800 dark:text-crumb-100">
-                      Battery Optimization
+                      {t('settings.batteryOptimization')}
                     </p>
                     <p className="text-sm text-crust-500 dark:text-crumb-500 mt-0.5">
-                      Tap to disable battery optimization for Levain. This ensures bake reminders arrive on time.
+                      {t('settings.batteryOptimizationHint')}
                     </p>
                     <p className="text-xs text-honey-600 dark:text-honey-400 mt-2">
-                      Open battery settings
+                      {t('settings.openBatterySettings')}
                     </p>
                   </div>
                   <ChevronRight className="w-5 h-5 text-crumb-400 dark:text-crust-600 mt-0.5" />
@@ -341,7 +405,7 @@ export function SettingsPage() {
           transition={{ delay: 0.25 }}
         >
           <h2 className="text-sm font-medium text-crust-500 dark:text-crumb-500 uppercase tracking-wide mb-3">
-            AI Features
+            {t('settings.aiFeatures')}
           </h2>
           <Card padding="md">
             <div className="flex items-start gap-3 mb-4">
@@ -350,15 +414,15 @@ export function SettingsPage() {
               </div>
               <div>
                 <h3 className="font-medium text-crust-800 dark:text-crumb-100">
-                  Claude AI Analysis
+                  {t('settings.claudeAnalysis')}
                 </h3>
                 <p className="text-sm text-crust-500 dark:text-crumb-500 mt-0.5">
-                  Get photo analysis and baking advice
+                  {t('settings.claudeAnalysisHint')}
                 </p>
               </div>
             </div>
             <Input
-              label="API Key"
+              label={t('settings.apiKey')}
               type="password"
               placeholder="sk-ant-..."
               value={settings.claudeApiKey || ''}
@@ -366,7 +430,7 @@ export function SettingsPage() {
                 updateSetting('claudeApiKey', e.target.value);
                 if (keyTest.status !== 'idle') setKeyTest({ status: 'idle' });
               }}
-              hint="Anthropic API key from console.anthropic.com — pay-as-you-go, not a Claude Max/Pro plan. Stored only on this device. Used to analyze starter photos."
+              hint={t('settings.apiKeyHint')}
             />
 
             <div className="mt-3 flex items-center gap-3">
@@ -377,7 +441,7 @@ export function SettingsPage() {
                 disabled={!settings.claudeApiKey?.trim()}
                 onClick={handleTestKey}
               >
-                Test key
+                {t('settings.testKey')}
               </Button>
               {keyTest.status === 'ok' && (
                 <span className="text-sm text-success-600 dark:text-success-400">
@@ -398,20 +462,70 @@ export function SettingsPage() {
           transition={{ delay: 0.3 }}
         >
           <h2 className="text-sm font-medium text-crust-500 dark:text-crumb-500 uppercase tracking-wide mb-3">
-            Data
+            {t('settings.data')}
           </h2>
           <Card padding="none">
+            {/* Include-photos toggle for export */}
+            <button
+              onClick={() => setIncludePhotos((v) => !v)}
+              className="w-full flex items-center gap-4 px-4 py-4 text-left hover:bg-crumb-50 dark:hover:bg-crust-800/50 transition-colors"
+            >
+              <ImageIcon className="w-5 h-5 text-crust-500 dark:text-crumb-500" />
+              <div className="flex-1">
+                <p className="font-medium text-crust-800 dark:text-crumb-100">
+                  {t('settings.includePhotos')}
+                </p>
+                <p className="text-sm text-crust-500 dark:text-crumb-500">
+                  {includePhotos
+                    ? t('settings.includePhotosOn')
+                    : t('settings.includePhotosOff')}
+                </p>
+              </div>
+              <span
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+                  includePhotos ? 'bg-honey-500' : 'bg-crumb-300 dark:bg-crust-700'
+                }`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                    includePhotos ? 'translate-x-5' : 'translate-x-0.5'
+                  }`}
+                />
+              </span>
+            </button>
+
+            <div className="border-t border-crumb-100 dark:border-crust-800" />
+
             <button
               onClick={handleExportData}
-              className="w-full flex items-center gap-4 px-4 py-4 text-left hover:bg-crumb-50 dark:hover:bg-crust-800/50 transition-colors"
+              disabled={isExporting}
+              className="w-full flex items-center gap-4 px-4 py-4 text-left hover:bg-crumb-50 dark:hover:bg-crust-800/50 transition-colors disabled:opacity-60"
             >
               <Download className="w-5 h-5 text-crust-500 dark:text-crumb-500" />
               <div className="flex-1">
                 <p className="font-medium text-crust-800 dark:text-crumb-100">
-                  Export Data
+                  {isExporting ? t('settings.preparingBackup') : t('settings.backupExport')}
                 </p>
                 <p className="text-sm text-crust-500 dark:text-crumb-500">
-                  Download all your data as JSON
+                  {t('settings.backupExportHint')}
+                </p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-crumb-400 dark:text-crust-600" />
+            </button>
+
+            <div className="border-t border-crumb-100 dark:border-crust-800" />
+
+            <button
+              onClick={handlePickImport}
+              className="w-full flex items-center gap-4 px-4 py-4 text-left hover:bg-crumb-50 dark:hover:bg-crust-800/50 transition-colors"
+            >
+              <Upload className="w-5 h-5 text-crust-500 dark:text-crumb-500" />
+              <div className="flex-1">
+                <p className="font-medium text-crust-800 dark:text-crumb-100">
+                  {t('settings.restoreImport')}
+                </p>
+                <p className="text-sm text-crust-500 dark:text-crumb-500">
+                  {t('settings.restoreImportHint')}
                 </p>
               </div>
               <ChevronRight className="w-5 h-5 text-crumb-400 dark:text-crust-600" />
@@ -426,10 +540,10 @@ export function SettingsPage() {
               <Trash2 className="w-5 h-5 text-error-500" />
               <div className="flex-1">
                 <p className="font-medium text-error-600 dark:text-error-400">
-                  Delete All Data
+                  {t('settings.deleteAllData')}
                 </p>
                 <p className="text-sm text-crust-500 dark:text-crumb-500">
-                  Permanently remove all local data
+                  {t('settings.deleteAllDataHint')}
                 </p>
               </div>
             </button>
@@ -452,10 +566,10 @@ export function SettingsPage() {
               Levain
             </h3>
             <p className="text-sm text-crust-500 dark:text-crumb-500 mt-1">
-              Version 1.0.0
+              {t('settings.version', { version: '1.0.0' })}
             </p>
             <p className="text-xs text-crust-400 dark:text-crumb-600 mt-2">
-              Your sourdough companion
+              {t('settings.tagline')}
             </p>
           </Card>
         </motion.section>
@@ -466,20 +580,75 @@ export function SettingsPage() {
         isOpen={showResetConfirm}
         onClose={() => setShowResetConfirm(false)}
         onConfirm={resetSettings}
-        title="Reset Settings"
-        message="This will reset all settings to their default values. Your data will not be affected."
-        confirmText="Reset"
+        title={t('settings.resetTitle')}
+        message={t('settings.resetMessage')}
+        confirmText={t('settings.resetConfirm')}
       />
 
       <ConfirmModal
         isOpen={showDeleteDataConfirm}
         onClose={() => setShowDeleteDataConfirm(false)}
         onConfirm={handleDeleteAllData}
-        title="Delete All Data"
-        message="This will permanently delete all your starters, feedings, recipes, and bakes. This action cannot be undone."
-        confirmText="Delete"
+        title={t('settings.deleteAllData')}
+        message={t('settings.deleteAllDataMessage')}
+        confirmText={t('common.delete')}
         variant="danger"
       />
+
+      {/* Import merge/replace chooser */}
+      {pendingImport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-restore-title"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white dark:bg-crust-900 rounded-2xl p-6 max-w-sm w-full shadow-xl"
+          >
+            <h3 id="settings-restore-title" className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-1">
+              {t('settings.restoreFromBackup')}
+            </h3>
+            <p className="text-sm text-crust-600 dark:text-crumb-400 mb-1">
+              {t('settings.backupSummary', {
+                date: new Date(pendingImport.exportDate).toLocaleDateString(),
+                starters: pendingImport.data.starters.length,
+                recipes: pendingImport.data.recipes.length,
+                bakes: pendingImport.data.bakes.length,
+              })}
+            </p>
+            <p className="text-xs text-crust-500 dark:text-crumb-500 mb-5">
+              {t('settings.restoreApplyHint')}
+            </p>
+            <div className="space-y-2">
+              <Button
+                fullWidth
+                onClick={() => runImport('merge')}
+                disabled={isImporting}
+              >
+                {t('settings.importMerge')}
+              </Button>
+              <Button
+                fullWidth
+                variant="secondary"
+                onClick={() => runImport('replace')}
+                disabled={isImporting}
+                className="text-error-600 dark:text-error-400"
+              >
+                {t('settings.importReplace')}
+              </Button>
+              <Button
+                fullWidth
+                variant="ghost"
+                onClick={() => setPendingImport(null)}
+                disabled={isImporting}
+              >
+                {t('common.cancel')}
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

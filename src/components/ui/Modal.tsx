@@ -1,7 +1,9 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from '../../lib/i18n/useTranslation';
+import { useFocusTrap } from '../../lib/useFocusTrap';
 
 interface ModalProps {
   isOpen: boolean;
@@ -28,6 +30,11 @@ export function Modal({
   showClose = true,
 }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const { t } = useTranslation();
+
+  useFocusTrap(dialogRef, isOpen);
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -72,6 +79,10 @@ export function Modal({
           onClick={handleOverlayClick}
         >
           <motion.div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={title ? titleId : undefined}
             className={`
               w-full ${sizeStyles[size]}
               bg-white dark:bg-crust-900
@@ -87,13 +98,14 @@ export function Modal({
             {(title || showClose) && (
               <div className="flex items-center justify-between px-5 py-4 border-b border-crumb-200 dark:border-crust-800">
                 {title && (
-                  <h2 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100">
+                  <h2 id={titleId} className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100">
                     {title}
                   </h2>
                 )}
                 {showClose && (
                   <button
                     onClick={onClose}
+                    aria-label={t('common.close')}
                     className="p-2 -m-2 text-crust-500 hover:text-crust-700 dark:text-crumb-500 dark:hover:text-crumb-300 touch-target"
                   >
                     <X className="w-5 h-5" />

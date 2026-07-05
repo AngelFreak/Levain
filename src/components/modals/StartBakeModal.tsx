@@ -4,6 +4,7 @@ import { Button, Input, NumberInput, BottomSheet, Textarea } from '../ui';
 import { db } from '../../lib/db';
 import { useAppStore } from '../../stores/appStore';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { useTranslation } from '../../lib/i18n/useTranslation';
 import type { Bake, Rating } from '../../types';
 
 interface StartBakeModalProps {
@@ -13,6 +14,7 @@ interface StartBakeModalProps {
 
 export function StartBakeModal({ isOpen, onClose }: StartBakeModalProps) {
   const { showToast } = useAppStore();
+  const { t } = useTranslation();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Step 1: Basic Info
@@ -46,7 +48,7 @@ export function StartBakeModal({ isOpen, onClose }: StartBakeModalProps) {
 
   const handleSubmit = async () => {
     if (!recipeName.trim()) {
-      showToast('Please enter a recipe name', 'error');
+      showToast(t('startBake.errorNoRecipeName'), 'error');
       return;
     }
 
@@ -76,11 +78,15 @@ export function StartBakeModal({ isOpen, onClose }: StartBakeModalProps) {
           shapeType: 'boule',
         },
         baking: {
-          ovenTemp: 245,
-          steamMethod: 'dutch oven',
-          coveredTime: 20,
-          uncoveredTime: 25,
+          ovenTemp: 0,
+          steamMethod: '',
+          coveredTime: 0,
+          uncoveredTime: 0,
         },
+        // The quick logger captures bulk metrics (when expanded) but no oven
+        // details, so flag process known only if the user filled them in.
+        processKnown: showMetrics,
+        bakingKnown: false,
         environment: {
           ambientTemp: bulkTemp,
         },
@@ -103,11 +109,11 @@ export function StartBakeModal({ isOpen, onClose }: StartBakeModalProps) {
       };
 
       await db.bakes.add(bake);
-      showToast('Bake logged successfully!', 'success');
+      showToast(t('startBake.toastLogged'), 'success');
       handleClose();
     } catch (error) {
       console.error('Failed to log bake:', error);
-      showToast('Failed to log bake', 'error');
+      showToast(t('startBake.toastLogFailed'), 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -137,7 +143,7 @@ export function StartBakeModal({ isOpen, onClose }: StartBakeModalProps) {
         onClick={handleClose}
         className="flex-1"
       >
-        Cancel
+        {t('common.cancel')}
       </Button>
       <Button
         onClick={handleSubmit}
@@ -145,13 +151,13 @@ export function StartBakeModal({ isOpen, onClose }: StartBakeModalProps) {
         isLoading={isSubmitting}
         className="flex-1"
       >
-        Log Bake
+        {t('startBake.logButton')}
       </Button>
     </div>
   );
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={handleClose} title="Log Bake" footer={footerContent}>
+    <BottomSheet isOpen={isOpen} onClose={handleClose} title={t('startBake.title')} footer={footerContent}>
       <div className="space-y-5">
         {/* Icon header */}
         <div className="flex justify-center">
@@ -162,8 +168,8 @@ export function StartBakeModal({ isOpen, onClose }: StartBakeModalProps) {
 
         {/* Recipe Name */}
         <Input
-          label="Recipe Name"
-          placeholder="e.g., Country Loaf, Focaccia"
+          label={t('startBake.recipeNameLabel')}
+          placeholder={t('startBake.recipeNamePlaceholder')}
           value={recipeName}
           onChange={(e) => setRecipeName(e.target.value)}
           autoFocus
@@ -173,7 +179,7 @@ export function StartBakeModal({ isOpen, onClose }: StartBakeModalProps) {
         {starters && starters.length > 1 && (
           <div>
             <label className="block text-sm font-medium text-crust-700 dark:text-crumb-200 mb-2">
-              Starter Used (optional)
+              {t('startBake.starterUsedLabel')}
             </label>
             <div className="bg-surface1 dark:bg-surfaceDark1 rounded-xl border border-crumb-300/50 dark:border-crust-600/50 overflow-hidden">
               <button
@@ -192,7 +198,7 @@ export function StartBakeModal({ isOpen, onClose }: StartBakeModalProps) {
                     ? 'text-honey-700 dark:text-honey-400'
                     : 'text-crust-700 dark:text-crumb-200'
                 }`}>
-                  None / Commercial Yeast
+                  {t('startBake.noStarter')}
                 </span>
                 {!selectedStarterId && (
                   <div className="w-5 h-5 rounded-full bg-honey-500 flex items-center justify-center">
@@ -239,7 +245,7 @@ export function StartBakeModal({ isOpen, onClose }: StartBakeModalProps) {
         {/* Show selected starter name if only one */}
         {starters?.length === 1 && selectedStarter && (
           <div className="flex items-center gap-2 p-3 bg-surface2 dark:bg-surfaceDark2 rounded-xl">
-            <span className="text-sm text-crust-600 dark:text-crumb-400">Using:</span>
+            <span className="text-sm text-crust-600 dark:text-crumb-400">{t('startBake.usingStarter')}</span>
             <span className="font-medium text-crust-800 dark:text-crumb-100">
               {selectedStarter.name}
             </span>
@@ -253,7 +259,7 @@ export function StartBakeModal({ isOpen, onClose }: StartBakeModalProps) {
             onClick={() => setShowMetrics(!showMetrics)}
             className="flex items-center justify-between w-full py-2 text-sm text-crust-600 dark:text-crumb-400 hover:text-crust-800 dark:hover:text-crumb-200"
           >
-            <span>{showMetrics ? '− Hide' : '+ Add'} bake details</span>
+            <span>{showMetrics ? t('startBake.hideBakeDetails') : t('startBake.addBakeDetails')}</span>
             {showMetrics ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
 
@@ -261,7 +267,7 @@ export function StartBakeModal({ isOpen, onClose }: StartBakeModalProps) {
             <div className="space-y-3 mt-2 p-4 bg-surface1 dark:bg-surfaceDark1 rounded-xl">
               <div className="flex items-center justify-between gap-4">
                 <label className="text-sm font-medium text-crust-700 dark:text-crumb-200 w-24">
-                  Total Flour
+                  {t('startBake.totalFlourLabel')}
                 </label>
                 <div className="flex-1 max-w-[180px]">
                   <NumberInput
@@ -276,7 +282,7 @@ export function StartBakeModal({ isOpen, onClose }: StartBakeModalProps) {
               </div>
               <div className="flex items-center justify-between gap-4">
                 <label className="text-sm font-medium text-crust-700 dark:text-crumb-200 w-24">
-                  Hydration
+                  {t('startBake.hydrationLabel')}
                 </label>
                 <div className="flex-1 max-w-[180px]">
                   <NumberInput
@@ -291,7 +297,7 @@ export function StartBakeModal({ isOpen, onClose }: StartBakeModalProps) {
               </div>
               <div className="flex items-center justify-between gap-4">
                 <label className="text-sm font-medium text-crust-700 dark:text-crumb-200 w-24">
-                  Bulk Time
+                  {t('startBake.bulkTimeLabel')}
                 </label>
                 <div className="flex-1 max-w-[180px]">
                   <NumberInput
@@ -306,7 +312,7 @@ export function StartBakeModal({ isOpen, onClose }: StartBakeModalProps) {
               </div>
               <div className="flex items-center justify-between gap-4">
                 <label className="text-sm font-medium text-crust-700 dark:text-crumb-200 w-24">
-                  Room Temp
+                  {t('startBake.roomTempLabel')}
                 </label>
                 <div className="flex-1 max-w-[180px]">
                   <NumberInput
@@ -330,7 +336,7 @@ export function StartBakeModal({ isOpen, onClose }: StartBakeModalProps) {
             onClick={() => setShowResults(!showResults)}
             className="flex items-center justify-between w-full py-2 text-sm text-crust-600 dark:text-crumb-400 hover:text-crust-800 dark:hover:text-crumb-200"
           >
-            <span>{showResults ? '− Hide' : '+ Add'} quick rating</span>
+            <span>{showResults ? t('startBake.hideQuickRating') : t('startBake.addQuickRating')}</span>
             {showResults ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
 
@@ -339,17 +345,20 @@ export function StartBakeModal({ isOpen, onClose }: StartBakeModalProps) {
               {/* Star Rating */}
               <div>
                 <label className="block text-xs font-medium text-crust-700 dark:text-crumb-200 mb-2">
-                  Overall Rating
+                  {t('startBake.overallRatingLabel')}
                 </label>
-                <div className="flex gap-2 justify-center">
+                <div className="flex gap-2 justify-center" role="group" aria-label={t('startBake.overallRatingGroup')}>
                   {([1, 2, 3, 4, 5] as Rating[]).map((star) => (
                     <button
                       key={star}
                       type="button"
                       onClick={() => setOverallRating(star)}
+                      aria-label={star === 1 ? t('startBake.starAriaSingular', { count: star }) : t('startBake.starAriaPlural', { count: star })}
+                      aria-pressed={star <= overallRating}
                       className="p-1 touch-target"
                     >
                       <Star
+                        aria-hidden="true"
                         className={`w-8 h-8 transition-colors ${
                           star <= overallRating
                             ? 'fill-honey-500 text-honey-500'
@@ -363,8 +372,8 @@ export function StartBakeModal({ isOpen, onClose }: StartBakeModalProps) {
 
               {/* Notes */}
               <Textarea
-                label="Notes"
-                placeholder="How did it turn out? Any observations..."
+                label={t('startBake.notesLabel')}
+                placeholder={t('startBake.notesPlaceholder')}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={2}

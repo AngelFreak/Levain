@@ -215,6 +215,7 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
         <button
           type="button"
           onClick={() => handleChange(value - step)}
+          aria-label="Decrease"
           className="w-11 h-11 rounded-full bg-crumb-200 dark:bg-crust-800 text-crust-700 dark:text-crumb-300 flex items-center justify-center touch-target hover:bg-crumb-300 dark:hover:bg-crust-700 transition-colors text-lg font-medium"
           disabled={min !== undefined && value <= min}
         >
@@ -251,6 +252,7 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
         <button
           type="button"
           onClick={() => handleChange(value + step)}
+          aria-label="Increase"
           className="w-11 h-11 rounded-full bg-crumb-200 dark:bg-crust-800 text-crust-700 dark:text-crumb-300 flex items-center justify-center touch-target hover:bg-crumb-300 dark:hover:bg-crust-700 transition-colors text-lg font-medium"
           disabled={max !== undefined && value >= max}
         >

@@ -1,6 +1,8 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { motion, AnimatePresence, useDragControls, type PanInfo } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import { useTranslation } from '../../lib/i18n/useTranslation';
+import { useFocusTrap } from '../../lib/useFocusTrap';
 
 interface BottomSheetProps {
   isOpen: boolean;
@@ -23,6 +25,9 @@ export function BottomSheet({
   const overlayRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragControls = useDragControls();
+  const titleId = useId();
+
+  useFocusTrap(sheetRef, isOpen);
 
   // Lock body scroll when open
   useEffect(() => {
@@ -35,6 +40,17 @@ export function BottomSheet({
       document.body.style.overflow = '';
     };
   }, [isOpen]);
+
+  // Close on escape key (drag-to-dismiss has no keyboard equivalent)
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleEscape);
+    }
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
 
   const handleDragEnd = (_: never, info: PanInfo) => {
     // If dragged down more than 100px or with high velocity, close
@@ -70,6 +86,9 @@ export function BottomSheet({
         >
           <motion.div
             ref={sheetRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={title ? titleId : undefined}
             className="absolute bottom-0 left-0 right-0 bg-white dark:bg-crust-900 rounded-t-3xl overflow-hidden pb-safe"
             style={getMaxHeightStyle()}
             initial={{ y: '100%' }}
@@ -93,7 +112,7 @@ export function BottomSheet({
             {/* Header */}
             {title && (
               <div className="px-5 pb-3 border-b border-crumb-200 dark:border-crust-800">
-                <h2 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 text-center">
+                <h2 id={titleId} className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 text-center">
                   {title}
                 </h2>
               </div>
@@ -139,6 +158,7 @@ interface ActionSheetAction {
 }
 
 export function ActionSheet({ isOpen, onClose, title, actions }: ActionSheetProps) {
+  const { t } = useTranslation();
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title={title}>
       <div className="space-y-2">
@@ -171,7 +191,7 @@ export function ActionSheet({ isOpen, onClose, title, actions }: ActionSheetProp
         onClick={onClose}
         className="w-full mt-4 px-4 py-3.5 rounded-xl bg-crumb-100 dark:bg-crust-800 text-crust-700 dark:text-crumb-300 font-medium transition-colors hover:bg-crumb-200 dark:hover:bg-crust-700 touch-target"
       >
-        Cancel
+        {t('common.cancel')}
       </button>
     </BottomSheet>
   );

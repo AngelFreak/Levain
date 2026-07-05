@@ -6,7 +6,9 @@ import type {
   Bake,
   ActiveTimeline,
   Settings,
+  StarterFeedingStats,
 } from '../types';
+import { computeStarterStats, statsToStarterUpdate } from './starterStats';
 
 // Levain local database using Dexie (IndexedDB wrapper)
 class LevainDatabase extends Dexie {
@@ -96,6 +98,38 @@ export async function getRecentFeedings(starterId: string, limit = 10): Promise<
     .slice(0, limit);
 }
 
+/**
+ * Recompute feeding-derived stats for a starter and persist them. The single
+ * write path for averagePeakTime/feedingStats — call after logging or editing a
+ * feeding, or on detail load to self-heal. Returns the computed stats, or null
+ * if the starter isn't found. Does not touch healthScore (photo-analysis owns it).
+ */
+export async function recomputeStarterStats(starterUuid: string): Promise<StarterFeedingStats | null> {
+  const starter = await db.starters.where('uuid').equals(starterUuid).first();
+  if (!starter?.id) return null;
+  const feedings = await db.feedings.where('starterId').equals(starterUuid).toArray();
+  const stats = computeStarterStats(feedings);
+  await db.starters.update(starter.id, statsToStarterUpdate(stats));
+  return stats;
+}
+
+/** Add discard grams to a starter's running total. */
+export async function addStarterDiscard(starterUuid: string, grams: number): Promise<void> {
+  if (!(grams > 0)) return;
+  const starter = await db.starters.where('uuid').equals(starterUuid).first();
+  if (!starter?.id) return;
+  await db.starters.update(starter.id, {
+    discardGrams: Math.round((starter.discardGrams ?? 0) + grams),
+  });
+}
+
+/** Reset a starter's discard total (e.g. after the user uses it up). */
+export async function resetStarterDiscard(starterUuid: string): Promise<void> {
+  const starter = await db.starters.where('uuid').equals(starterUuid).first();
+  if (!starter?.id) return;
+  await db.starters.update(starter.id, { discardGrams: 0 });
+}
+
 // Recipe operations
 export async function createRecipe(recipe: Omit<Recipe, 'id' | 'uuid' | 'createdAt' | 'updatedAt'>): Promise<number | undefined> {
   const now = new Date();
@@ -140,6 +174,16 @@ export async function getActiveTimeline(): Promise<ActiveTimeline | undefined> {
   return db.activeTimelines.where('status').equals('active').first();
 }
 
+// All currently-active timelines, soonest-started first. Use this instead of
+// getActiveTimeline() anywhere more than one bake could be running, so no active
+// timeline is ever stranded/inaccessible.
+export async function getActiveTimelines(): Promise<ActiveTimeline[]> {
+  const timelines = await db.activeTimelines.where('status').equals('active').toArray();
+  return timelines.sort(
+    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+  );
+}
+
 // Create a Bake journal entry from a completed ActiveTimeline
 export async function createBakeFromTimeline(
   timeline: ActiveTimeline,
@@ -163,24 +207,28 @@ export async function createBakeFromTimeline(
       flourBreakdown: recipe?.flourBreakdown || [],
       additions: recipe?.additions || [],
     },
+    // Process & baking aren't captured during a timeline bake, so we don't
+    // fabricate specifics — fields are zeroed and flagged unknown for the UI.
     process: {
-      bulkTime: 4,
-      bulkTemp: 24,
-      folds: 4,
+      bulkTime: 0,
+      bulkTemp: 0,
+      folds: 0,
       foldMethod: 'stretch_fold',
       proofMethod: 'room_temp',
-      proofTime: 2,
-      proofTemp: 24,
+      proofTime: 0,
+      proofTemp: 0,
       shapeType: 'boule',
     },
     baking: {
-      ovenTemp: 245,
-      steamMethod: 'Dutch oven',
-      coveredTime: 20,
-      uncoveredTime: 25,
+      ovenTemp: 0,
+      steamMethod: '',
+      coveredTime: 0,
+      uncoveredTime: 0,
     },
+    processKnown: false,
+    bakingKnown: false,
     environment: {
-      ambientTemp: 22,
+      ambientTemp: 0,
     },
     results: {
       overall: overallRating,

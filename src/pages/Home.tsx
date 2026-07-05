@@ -14,9 +14,11 @@ import { db } from '../lib/db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { ActiveTimeline } from '../types';
 import { formatDistanceToNow } from 'date-fns';
+import { useTranslation } from '../lib/i18n/useTranslation';
 
 export function HomePage() {
   const { setActiveTab, openModal, navigateTo } = useAppStore();
+  const { t } = useTranslation();
 
   // Use live queries for reactive data
   // Note: Dexie doesn't support boolean index queries, using filter
@@ -30,10 +32,13 @@ export function HomePage() {
     []
   );
 
-  const activeTimeline = useLiveQuery(
-    () => db.activeTimelines.where('status').equals('active').first(),
-    []
-  ) as ActiveTimeline | undefined;
+  // All active timelines (not just the first) so concurrent bakes are reachable.
+  const activeTimelines = useLiveQuery(async () => {
+    const active = await db.activeTimelines.where('status').equals('active').toArray();
+    return active.sort(
+      (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+    );
+  }, []) as ActiveTimeline[] | undefined;
 
   return (
     <div className="px-4 pt-6 pb-4">
@@ -54,12 +59,13 @@ export function HomePage() {
               Levain
             </h1>
             <p className="text-crust-600 dark:text-crumb-400 mt-1">
-              Your sourdough companion
+              {t('home.subtitle')}
             </p>
           </div>
         </div>
         <button
           onClick={() => setActiveTab('settings')}
+          aria-label={t('home.openSettings')}
           className="w-10 h-10 rounded-full bg-crumb-100 dark:bg-crust-800 text-crust-600 dark:text-crumb-400 flex items-center justify-center"
         >
           <Settings className="w-5 h-5" />
@@ -67,45 +73,54 @@ export function HomePage() {
       </motion.div>
 
       {/* Active Bake Banner */}
-      {activeTimeline && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="mb-6"
-        >
-          <Card
-            variant="elevated"
-            padding="none"
-            pressable
-            onPress={() => navigateTo('active-bake')}
-            className="bg-gradient-to-br from-crust-600 to-crust-700 text-white overflow-hidden"
-          >
-            <div className="p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Timer className="w-4 h-4" />
-                <span className="text-xs font-medium uppercase tracking-wide opacity-90">
-                  Active Bake
-                </span>
-              </div>
-              <h3 className="text-lg font-semibold mb-1">{activeTimeline.name}</h3>
-              <div className="flex items-center gap-4 text-sm opacity-90">
-                <span>
-                  Step {activeTimeline.currentStepIndex + 1} of{' '}
-                  {activeTimeline.steps.length}
-                </span>
-                <ChevronRight className="w-4 h-4" />
-              </div>
-            </div>
-            <div className="h-1 bg-white/20">
-              <div
-                className="h-full bg-white/80"
-                style={{
-                  width: `${((activeTimeline.currentStepIndex + 1) / activeTimeline.steps.length) * 100}%`,
-                }}
-              />
-            </div>
-          </Card>
-        </motion.div>
+      {activeTimelines && activeTimelines.length > 0 && (
+        <div className="mb-6 space-y-3">
+          {activeTimelines.map((timeline, index) => (
+            <motion.div
+              key={timeline.uuid}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: index * 0.05 }}
+            >
+              <Card
+                variant="elevated"
+                padding="none"
+                pressable
+                onPress={() => navigateTo('active-bake', { timelineId: timeline.uuid })}
+                className="bg-gradient-to-br from-crust-600 to-crust-700 text-white overflow-hidden"
+              >
+                <div className="p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Timer className="w-4 h-4" />
+                    <span className="text-xs font-medium uppercase tracking-wide opacity-90">
+                      {activeTimelines.length > 1
+                        ? t('home.activeBakeNumbered', { number: index + 1 })
+                        : t('home.activeBake')}
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-semibold mb-1">{timeline.name}</h3>
+                  <div className="flex items-center gap-4 text-sm opacity-90">
+                    <span>
+                      {t('home.stepOfTotal', {
+                        current: timeline.currentStepIndex + 1,
+                        total: timeline.steps.length,
+                      })}
+                    </span>
+                    <ChevronRight className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="h-1 bg-white/20">
+                  <div
+                    className="h-full bg-white/80"
+                    style={{
+                      width: `${((timeline.currentStepIndex + 1) / timeline.steps.length) * 100}%`,
+                    }}
+                  />
+                </div>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
       )}
 
       {/* Bake Button */}
@@ -127,8 +142,8 @@ export function HomePage() {
               <ChefHat className="w-7 h-7" />
             </div>
             <div className="flex-1">
-              <h3 className="text-lg font-display font-semibold">Bake</h3>
-              <p className="text-sm opacity-90">Pick a recipe and start</p>
+              <h3 className="text-lg font-display font-semibold">{t('home.bake')}</h3>
+              <p className="text-sm opacity-90">{t('home.bakeSubtitle')}</p>
             </div>
             <ChevronRight className="w-6 h-6 opacity-80" />
           </div>
@@ -144,13 +159,13 @@ export function HomePage() {
       >
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100">
-            Your Starters
+            {t('home.yourStarters')}
           </h2>
           <button
             onClick={() => setActiveTab('starters')}
             className="text-sm text-crust-600 dark:text-crumb-400 flex items-center gap-1"
           >
-            View all <ChevronRight className="w-4 h-4" />
+            {t('home.viewAll')} <ChevronRight className="w-4 h-4" />
           </button>
         </div>
 
@@ -168,8 +183,10 @@ export function HomePage() {
                     </h3>
                     <p className="text-sm text-crust-500 dark:text-crumb-500">
                       {starter.lastFed
-                        ? `Fed ${formatDistanceToNow(new Date(starter.lastFed))} ago`
-                        : 'Not fed yet'}
+                        ? t('home.fedAgo', {
+                            time: formatDistanceToNow(new Date(starter.lastFed)),
+                          })
+                        : t('home.notFedYet')}
                     </p>
                   </div>
                   <div className="text-right">
@@ -193,14 +210,14 @@ export function HomePage() {
           <Card padding="md" className="text-center">
             <Beaker className="w-8 h-8 mx-auto mb-2 text-crumb-400" />
             <p className="text-crust-600 dark:text-crumb-400 mb-3">
-              No starters yet
+              {t('home.noStartersYet')}
             </p>
             <Button
               size="sm"
               leftIcon={<Plus className="w-4 h-4" />}
               onClick={() => openModal('new-starter')}
             >
-              Add Starter
+              {t('home.addStarter')}
             </Button>
           </Card>
         )}
@@ -214,13 +231,13 @@ export function HomePage() {
       >
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100">
-            Recent Bakes
+            {t('home.recentBakes')}
           </h2>
           <button
             onClick={() => setActiveTab('book')}
             className="text-sm text-crust-600 dark:text-crumb-400 flex items-center gap-1"
           >
-            View all <ChevronRight className="w-4 h-4" />
+            {t('home.viewAll')} <ChevronRight className="w-4 h-4" />
           </button>
         </div>
 
@@ -245,7 +262,9 @@ export function HomePage() {
                       {bake.recipeName}
                     </h3>
                     <p className="text-sm text-crust-500 dark:text-crumb-500">
-                      {formatDistanceToNow(new Date(bake.date))} ago
+                      {t('home.timeAgo', {
+                        time: formatDistanceToNow(new Date(bake.date)),
+                      })}
                     </p>
                   </div>
                   <div className="flex items-center gap-1 text-honey-500">
@@ -262,7 +281,7 @@ export function HomePage() {
           <Card padding="md" className="text-center">
             <Clock className="w-8 h-8 mx-auto mb-2 text-crumb-400" />
             <p className="text-crust-600 dark:text-crumb-400">
-              No bakes logged yet. Start your first bake!
+              {t('home.noBakesYet')}
             </p>
           </Card>
         )}

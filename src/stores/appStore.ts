@@ -19,6 +19,12 @@ interface AppState {
   activeBakeId: string | null;
   setActiveBake: (id: string | null) => void;
 
+  // One-shot "open Book at this recipe category" intent, consumed by BookPage
+  // on mount/update (e.g. the "use your discard" prompt deep-links here).
+  bookIntent: { category: string } | null;
+  openBookAtCategory: (category: string) => void;
+  consumeBookIntent: () => void;
+
   // Modal/Sheet state
   activeModal: ModalType | null;
   modalData: unknown;
@@ -42,7 +48,7 @@ interface AppState {
 
 export type TabName = 'home' | 'calculator' | 'starters' | 'book' | 'settings';
 
-export type PageType = 'starter-detail' | 'bake-detail' | 'recipe-detail' | 'active-bake';
+export type PageType = 'starter-detail' | 'bake-detail' | 'bake-compare' | 'recipe-detail' | 'active-bake';
 
 export type ModalType =
   | 'new-starter'
@@ -123,6 +129,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeBakeId: id,
       hasActiveBake: id !== null,
     }),
+
+  // Book deep-link intent
+  bookIntent: null,
+  openBookAtCategory: (category) => {
+    // Switch to the Book tab and stash the category for BookPage to consume.
+    get().setActiveTab('book');
+    set({ bookIntent: { category }, activePage: null, pageData: null });
+  },
+  consumeBookIntent: () => set({ bookIntent: null }),
 
   // Modals
   activeModal: null,

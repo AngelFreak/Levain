@@ -4,6 +4,12 @@
 // Starter Types
 // ============================================================================
 
+/**
+ * Where the starter is currently kept. Drives how soon it needs feeding:
+ * room temperature ferments fast (hours), the fridge slows it to ~weekly.
+ */
+export type StorageLocation = 'room' | 'fridge';
+
 export interface Starter {
   id?: number;
   uuid: string;
@@ -12,14 +18,46 @@ export interface Starter {
   hydration: number;
   createdDate: Date;
   isActive: boolean;
+  /** Current storage. Defaults to 'room' for starters created before this field. */
+  storageLocation?: StorageLocation;
   notes: string;
   photoUri?: string;
   lastFed?: Date;
+  /** 0–100 from the most recent PHOTO analysis (Claude/on-device). Not feeding-derived. */
   healthScore?: number;
+  /**
+   * Mean hours from feeding to peak, temperature-normalized to the reference
+   * temp, computed from logged feedings. Undefined until enough peak data.
+   * See src/lib/starterStats.ts (the single writer).
+   */
   averagePeakTime?: number;
+  /** Cached behavioral stats derived from feedings. See computeStarterStats(). */
+  feedingStats?: StarterFeedingStats;
+  /**
+   * Running total of discard accumulated from feedings (grams), reset when the
+   * user logs that they've used it up. Drives the "use your discard" prompt.
+   */
+  discardGrams?: number;
   /** Most recent Claude photo analysis of this starter (if any). */
   lastAnalysis?: StarterAnalysis;
   syncedAt?: Date;
+}
+
+/** Feeding-derived activity metrics, cached on the starter for quick display. */
+export interface StarterFeedingStats {
+  /** Total feedings logged. */
+  feedingCount: number;
+  /** Feedings that recorded a peak time (basis for averagePeakTime). */
+  peakSampleCount: number;
+  /** Temperature-normalized mean time-to-peak in hours, if known. */
+  averagePeakHours?: number;
+  /** Median days between feedings, if ≥2 feedings. */
+  medianIntervalDays?: number;
+  /**
+   * Behavioral activity score 0–100 from feeding recency + consistency + peak
+   * reliability. Distinct from the photo-analysis healthScore.
+   */
+  activityScore?: number;
 }
 
 export interface Feeding {
@@ -80,6 +118,52 @@ export interface Recipe {
   createdAt: Date;
   updatedAt: Date;
   syncedAt?: Date;
+
+  // ---- Optional extended fields (e.g. yeast-leavened pizza doughs) ----
+  // All optional so existing sourdough recipes remain valid unchanged.
+  /** Stable identifier used for idempotent seeding (upsert key). */
+  slug?: string;
+  /** Free-form style label, e.g. "Neapolitan". */
+  style?: string;
+  /** Target finished dough weight in grams. */
+  totalDoughWeight?: number;
+  /** Yield expressed as dough balls (for pizza/portioned doughs). */
+  yield?: RecipeYield;
+  /**
+   * Baker's percentages relative to flour weight (always 100). The
+   * baseline for scaling: scale by flour weight to keep these ratios.
+   */
+  bakersPercent?: RecipeBakersPercent;
+  /** Explicit weighed ingredient list with units and baker's %. */
+  ingredients?: RecipeIngredient[];
+}
+
+export interface RecipeYield {
+  /** Number of dough balls. */
+  balls: number;
+  /** Weight per ball in grams. */
+  ballWeightG: number;
+  /** Target stretched pizza diameter in centimetres. */
+  pizzaDiameterCm: number;
+}
+
+export interface RecipeBakersPercent {
+  /** Always 100 — the flour baseline. */
+  flour: number;
+  water: number;
+  salt: number;
+  /** Fresh yeast as a percentage of flour weight. */
+  yeastFresh: number;
+}
+
+export interface RecipeIngredient {
+  name: string;
+  /** Amount in the given unit (metric). */
+  amount: number;
+  /** Metric unit, e.g. "g" or "ml". */
+  unit: string;
+  /** This ingredient's weight as a percentage of flour weight. */
+  bakersPercent: number;
 }
 
 export type RecipeCategory =
@@ -114,6 +198,17 @@ export interface MethodStep {
   duration: number;
   waitTime: number;
   tips?: string;
+  /** Spiral-mixer setting for this step (e.g. Ooni Halo Pro). */
+  mixer?: MixerSetting;
+  /** Countdown timer for this step, in seconds. */
+  timerSeconds?: number;
+}
+
+export interface MixerSetting {
+  /** Mixer power level as a percentage. */
+  percent: number;
+  /** Working speed in revolutions per minute. */
+  rpm: number;
 }
 
 export interface RecipeTiming {
@@ -140,9 +235,19 @@ export interface Bake {
   results: BakeResults;
   photos: BakePhoto[];
   aiAnalysis?: BakeAIAnalysis;
+  /** Most recent crumb photo analysis (Claude or on-device), if any. */
+  crumbAnalysis?: CrumbAnalysis;
   notes: string;
   tags: string[];
   isFavorite: boolean;
+  /**
+   * Whether the user actually recorded process / baking details. Bakes created
+   * from a completed timeline don't have these, so the detail view shows
+   * "not recorded" rather than fabricated numbers. Defaults to true for
+   * hand-logged bakes that filled the fields. Optional for back-compat.
+   */
+  processKnown?: boolean;
+  bakingKnown?: boolean;
   createdAt: Date;
   updatedAt: Date;
   syncedAt?: Date;
@@ -249,6 +354,12 @@ export interface TimelineStep {
   notes?: string;
   photos?: string[];
   photoPrompt?: string;
+  tips?: string;
+  // i18n metadata (see ScheduleStep); English name/description remain canonical.
+  nameKey?: string;
+  descKey?: string;
+  tipsKey?: string;
+  i18nParams?: Record<string, string | number>;
 }
 
 export type StepStatus = 'pending' | 'active' | 'completed' | 'skipped';
@@ -313,6 +424,18 @@ export interface ScheduleStep {
   tips?: string;
   notifyBefore?: number;
   photoPrompt?: string;
+  /**
+   * i18n metadata for localizing this engine-generated step at display time.
+   * The English `step`/`description`/`tips` above remain the canonical values
+   * (persisted, and used for string-matching in the planner), so these are
+   * purely additive: the UI translates via these keys when present and falls
+   * back to the English fields otherwise. `params` holds interpolation values
+   * (temps, counts, intervals) referenced by the keyed templates.
+   */
+  nameKey?: string;
+  descKey?: string;
+  tipsKey?: string;
+  i18nParams?: Record<string, string | number>;
 }
 
 export interface AlternativeSchedule {
@@ -437,10 +560,13 @@ export interface Settings {
   value: unknown;
 }
 
+export type Language = 'en' | 'da';
+
 export interface UserSettings {
   units: 'metric' | 'imperial';
   temperatureUnit: 'celsius' | 'fahrenheit';
   timeFormat: '12h' | '24h';
+  language: Language;
   defaultHydration: number;
   defaultStarterPercent: number;
   defaultSaltPercent: number;
@@ -450,8 +576,6 @@ export interface UserSettings {
   hapticFeedbackEnabled: boolean;
   darkMode: 'system' | 'light' | 'dark';
   claudeApiKey?: string;
-  syncEnabled: boolean;
-  syncUrl?: string;
   // Feeding reminder settings
   feedingRemindersEnabled: boolean;
   feedingReminderHours: number; // Hours after feeding to remind
@@ -461,6 +585,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   units: 'metric',
   temperatureUnit: 'celsius',
   timeFormat: '24h',
+  language: 'en',
   defaultHydration: 75,
   defaultStarterPercent: 20,
   defaultSaltPercent: 2,
@@ -469,7 +594,6 @@ export const DEFAULT_SETTINGS: UserSettings = {
   notificationsEnabled: true,
   hapticFeedbackEnabled: true,
   darkMode: 'system',
-  syncEnabled: false,
   feedingRemindersEnabled: true,
   feedingReminderHours: 12, // Default: remind 12 hours after feeding
 };

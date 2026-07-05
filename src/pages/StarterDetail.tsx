@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
@@ -17,74 +18,170 @@ import {
   KeyRound,
   Cpu,
   FlaskConical,
+  Home,
+  Snowflake,
+  Recycle,
 } from 'lucide-react';
 import { Card, Button, ActionSheet, Badge, BottomSheet } from '../components/ui';
 import { ConfirmModal } from '../components/ui/Modal';
 import { EditStarterModal } from '../components/modals';
 import { useAppStore } from '../stores/appStore';
 import { useSettingsStore } from '../stores/settingsStore';
-import { db } from '../lib/db';
+import { LineChart, Line, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { PlanFeedModal } from '../components/modals/PlanFeedModal';
+import { db, recomputeStarterStats, resetStarterDiscard } from '../lib/db';
+import { computeNormalizedPeakSeries } from '../lib/starterStats';
 import { formatTime } from '../lib/fermentation';
+import { rescheduleFeedingReminder, cancelFeedingReminder } from '../lib/notifications';
+import { releaseFeedingReminderId } from '../lib/notificationIds';
+import {
+  getStorageLocation,
+  getStorageLocationMeta,
+  FRIDGE_FEEDING_INTERVAL_DAYS,
+} from '../lib/storage';
+import type { StorageLocation } from '../types';
 import { takePhoto, photoToBase64 } from '../lib/photos';
 import { analyzeStarter, MissingApiKeyError } from '../lib/claude';
 import { analyzeStarterLocal } from '../lib/starterVision';
 import { stageBadgeVariant } from '../lib/starterStages';
 import { differenceInDays } from 'date-fns';
-import type { Starter, Feeding } from '../types';
 import { formatDistanceToNow, format } from 'date-fns';
+import { useTranslation } from '../lib/i18n/useTranslation';
 
 interface StarterDetailPageProps {
   starterId: string;
 }
 
 export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
-  const { goBackFromPage, openModal, showToast } = useAppStore();
+  const { goBackFromPage, openModal, showToast, openBookAtCategory } = useAppStore();
   const { settings } = useSettingsStore();
+  const { t } = useTranslation();
   const hasClaudeKey = Boolean(settings.claudeApiKey?.trim());
-  const [starter, setStarter] = useState<Starter | null>(null);
-  const [feedings, setFeedings] = useState<Feeding[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPhotoSheet, setShowPhotoSheet] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showPlanFeed, setShowPlanFeed] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
+  // Live queries so the page reacts to DB changes (feeding, peak-mark, edits,
+  // location changes) without needing to navigate away and back.
+  // `undefined` = still loading (first run); a row or `null` = resolved.
+  const starterResult = useLiveQuery(
+    () => db.starters.where('uuid').equals(starterId).first(),
+    [starterId]
+  );
+  const starter = starterResult ?? null;
+  const isLoading = starterResult === undefined;
+
+  const feedings = useLiveQuery(async () => {
+    const rows = await db.feedings.where('starterId').equals(starterId).toArray();
+    rows.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return rows;
+  }, [starterId]) ?? [];
+
+  // Keep feeding-derived stats fresh whenever the feedings change. Writing the
+  // recomputed stats back to the starter row re-triggers the starter live query,
+  // so tiles/averages update in place. Guard prevents redundant recompute loops.
   useEffect(() => {
-    const loadData = async () => {
-      // Load starter
-      const starterData = await db.starters.where('uuid').equals(starterId).first();
-      if (starterData) {
-        setStarter(starterData);
-      }
+    recomputeStarterStats(starterId);
+  }, [starterId, feedings.length]);
 
-      // Load feedings for this starter, sorted by timestamp descending (newest first)
-      const feedingsData = await db.feedings
-        .where('starterId')
-        .equals(starterId)
-        .toArray();
-      // Sort in memory by timestamp descending
-      feedingsData.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      setFeedings(feedingsData);
-      setIsLoading(false);
-    };
-
-    loadData();
-  }, [starterId]);
+  // Stamp the current time as the peak for the most recent feeding that hasn't
+  // recorded one yet, then recompute stats. This is the capture path that makes
+  // averagePeakTime meaningful (the feeding form has no peak-time input).
+  const handleMarkPeak = async () => {
+    const latestUnpeaked = feedings.find((f) => !f.peakTime);
+    if (!latestUnpeaked?.id) {
+      showToast(t('starterDetail.toastNoFeedingToMark'), 'info');
+      return;
+    }
+    const hours =
+      (Date.now() - new Date(latestUnpeaked.timestamp).getTime()) / (1000 * 60 * 60);
+    if (hours < 0.25) {
+      showToast(t('starterDetail.toastFeedingJustLogged'), 'info');
+      return;
+    }
+    try {
+      await db.feedings.update(latestUnpeaked.id, { peakTime: new Date() });
+      await recomputeStarterStats(starterId);
+      // Live queries pick up the DB changes automatically.
+      showToast(t('starterDetail.toastPeakRecorded', { hours: Math.round(hours) }), 'success');
+    } catch (error) {
+      console.error('Failed to mark peak:', error);
+      showToast(t('starterDetail.toastPeakFailed'), 'error');
+    }
+  };
 
   const handleDelete = async () => {
     if (!starter?.id) return;
 
     try {
+      // Cancel any scheduled feeding reminder and free its notification ID.
+      await cancelFeedingReminder(starter);
+      await releaseFeedingReminderId(starter.uuid);
       // Delete all feedings for this starter
       await db.feedings.where('starterId').equals(starterId).delete();
       // Delete the starter
       await db.starters.delete(starter.id);
-      showToast(`${starter.name} has been deleted`, 'success');
+      showToast(t('starterDetail.toastDeleted', { name: starter.name }), 'success');
       goBackFromPage();
     } catch (error) {
-      showToast('Failed to delete starter', 'error');
+      showToast(t('starterDetail.toastDeleteFailed'), 'error');
     }
+  };
+
+  const handleChangeLocation = async (location: StorageLocation) => {
+    if (!starter?.id) return;
+    if (getStorageLocation(starter.storageLocation) === location) return;
+
+    try {
+      await db.starters.update(starter.id, { storageLocation: location });
+
+      // Re-read so we reschedule against the freshest lastFed (e.g. if the
+      // starter was fed via the modal since this page mounted). The live query
+      // reflects the DB write; `updated` is just the value passed to reschedule.
+      const fresh = (await db.starters.get(starter.id)) ?? starter;
+      const updated = { ...fresh, storageLocation: location };
+
+      // Move between room/fridge changes the feeding cadence — reschedule the
+      // pending reminder relative to the last feeding using the new interval.
+      let scheduledTime: Date | undefined;
+      if (settings.notificationsEnabled) {
+        const result = await rescheduleFeedingReminder(
+          updated,
+          settings.feedingRemindersEnabled,
+          settings.feedingReminderHours
+        );
+        scheduledTime = result.scheduledTime;
+      }
+
+      const meta = getStorageLocationMeta(location);
+      const place = meta.label.toLowerCase();
+      if (scheduledTime) {
+        showToast(
+          location === 'fridge'
+            ? t('starterDetail.toastMovedFridge', {
+                place,
+                days: FRIDGE_FEEDING_INTERVAL_DAYS,
+              })
+            : t('starterDetail.toastMovedRoom', { place }),
+          'success'
+        );
+      } else {
+        showToast(t('starterDetail.toastMoved', { place }), 'success');
+      }
+    } catch (error) {
+      console.error('Failed to change storage location:', error);
+      showToast(t('starterDetail.toastMoveFailed'), 'error');
+    }
+  };
+
+  const handleUsedDiscard = async () => {
+    if (!starter) return;
+    await resetStarterDiscard(starter.uuid);
+    // Live query reflects the reset discardGrams.
+    showToast(t('starterDetail.toastDiscardCleared'), 'success');
   };
 
   const handleAnalyze = async (source: 'camera' | 'gallery', method: 'local' | 'claude') => {
@@ -101,7 +198,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
 
       const base64 = await photoToBase64(photo);
       if (!base64) {
-        showToast('Could not read that photo. Please try again.', 'error');
+        showToast(t('starterDetail.toastPhotoUnreadable'), 'error');
         return;
       }
 
@@ -123,9 +220,11 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
           : await analyzeStarterLocal(base64, ctx);
 
       await db.starters.update(starter.id, { healthScore, lastAnalysis: analysis });
-      setStarter({ ...starter, healthScore, lastAnalysis: analysis });
+      // Live query reflects the new analysis.
       showToast(
-        method === 'claude' ? 'Analyzed with Claude!' : 'Quick estimate ready!',
+        method === 'claude'
+          ? t('starterDetail.toastAnalyzedClaude')
+          : t('starterDetail.toastAnalyzedLocal'),
         'success'
       );
     } catch (error) {
@@ -136,7 +235,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
         const message =
           error instanceof Error && error.message
             ? error.message
-            : 'Analysis failed. Please try again.';
+            : t('starterDetail.toastAnalysisFailed');
         showToast(message, 'error');
       }
     } finally {
@@ -152,12 +251,12 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
   };
 
   const getFeedingStatus = (lastFed?: Date) => {
-    if (!lastFed) return { color: 'text-crust-500', label: 'Never fed' };
+    if (!lastFed) return { color: 'text-crust-500', label: t('starterDetail.statusNeverFed') };
     const hoursSinceFed = (Date.now() - new Date(lastFed).getTime()) / (1000 * 60 * 60);
-    if (hoursSinceFed < 8) return { color: 'text-success-600', label: 'Recently fed' };
-    if (hoursSinceFed < 24) return { color: 'text-honey-600', label: 'Ready to use' };
-    if (hoursSinceFed < 48) return { color: 'text-warning-600', label: 'Needs feeding' };
-    return { color: 'text-error-600', label: 'Feed urgently!' };
+    if (hoursSinceFed < 8) return { color: 'text-success-600', label: t('starterDetail.statusRecentlyFed') };
+    if (hoursSinceFed < 24) return { color: 'text-honey-600', label: t('starterDetail.statusReadyToUse') };
+    if (hoursSinceFed < 48) return { color: 'text-warning-600', label: t('starterDetail.statusNeedsFeeding') };
+    return { color: 'text-error-600', label: t('starterDetail.statusFeedUrgently') };
   };
 
   if (isLoading) {
@@ -177,16 +276,26 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
           className="flex items-center gap-2 text-crust-600 dark:text-crumb-400 mb-6"
         >
           <ArrowLeft className="w-5 h-5" />
-          Back
+          {t('common.back')}
         </button>
         <Card padding="lg" className="text-center">
-          <p className="text-crust-600 dark:text-crumb-400">Starter not found</p>
+          <p className="text-crust-600 dark:text-crumb-400">{t('starterDetail.notFound')}</p>
         </Card>
       </div>
     );
   }
 
   const feedingStatus = getFeedingStatus(starter.lastFed);
+  const peakHistory = computeNormalizedPeakSeries(feedings);
+
+  // A photo analysis describes the starter at the moment it was taken. Once the
+  // starter is fed after that, the estimate no longer reflects reality, so hide
+  // it (it's superseded). With the live query above, feeding hides it instantly.
+  const analysisIsCurrent =
+    !!starter.lastAnalysis &&
+    (!starter.lastFed ||
+      new Date(starter.lastAnalysis.timestamp).getTime() >=
+        new Date(starter.lastFed).getTime());
 
   return (
     <div className="px-4 pt-6 pb-24">
@@ -201,24 +310,26 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
           className="flex items-center gap-2 text-crust-600 dark:text-crumb-400"
         >
           <ArrowLeft className="w-5 h-5" />
-          Back
+          {t('common.back')}
         </button>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowHelp(true)}
-            aria-label="How analysis works"
+            aria-label={t('starterDetail.helpAriaLabel')}
             className="p-2 rounded-full hover:bg-crumb-100 dark:hover:bg-crust-800"
           >
             <HelpCircle className="w-5 h-5 text-crust-600 dark:text-crumb-400" />
           </button>
           <button
             onClick={() => setShowEditModal(true)}
+            aria-label={t('starterDetail.editAriaLabel')}
             className="p-2 rounded-full hover:bg-crumb-100 dark:hover:bg-crust-800"
           >
             <Edit2 className="w-5 h-5 text-crust-600 dark:text-crumb-400" />
           </button>
           <button
             onClick={() => setShowDeleteConfirm(true)}
+            aria-label={t('starterDetail.deleteAriaLabel')}
             className="p-2 rounded-full hover:bg-error-50 dark:hover:bg-error-950/20"
           >
             <Trash2 className="w-5 h-5 text-error-500" />
@@ -254,7 +365,18 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
                 </h1>
                 {!starter.isActive && (
                   <span className="px-2 py-0.5 text-xs bg-crumb-200 dark:bg-crust-700 text-crust-600 dark:text-crumb-400 rounded-full">
-                    Inactive
+                    {t('starterDetail.inactive')}
+                  </span>
+                )}
+                {getStorageLocation(starter.storageLocation) === 'fridge' ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
+                    <Snowflake className="w-3 h-3" />
+                    {t('starterDetail.fridge')}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-honey-100 dark:bg-honey-900/30 text-honey-700 dark:text-honey-400 rounded-full">
+                    <Home className="w-3 h-3" />
+                    {t('starterDetail.room')}
                   </span>
                 )}
               </div>
@@ -262,9 +384,9 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
               <div className="flex items-center gap-4 mt-2 text-sm text-crust-600 dark:text-crumb-400">
                 <span className="flex items-center gap-1">
                   <Droplets className="w-4 h-4" />
-                  {starter.hydration}% hydration
+                  {t('starterDetail.hydrationLabel', { value: starter.hydration })}
                 </span>
-                <span>{starter.flourType} flour</span>
+                <span>{t('starterDetail.flourLabel', { flour: starter.flourType })}</span>
               </div>
 
               <div className="flex items-center gap-2 mt-3">
@@ -273,7 +395,9 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
                 </span>
                 {starter.lastFed && (
                   <span className="text-sm text-crust-500 dark:text-crumb-500">
-                    (fed {formatDistanceToNow(new Date(starter.lastFed))} ago)
+                    {t('starterDetail.fedAgo', {
+                      ago: formatDistanceToNow(new Date(starter.lastFed)),
+                    })}
                   </span>
                 )}
               </div>
@@ -289,25 +413,48 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
                 {starter.healthScore ?? '--'}
               </div>
               <div className="text-xs text-crust-500 dark:text-crumb-500">
-                Health Score
+                {t('starterDetail.healthScore')}
               </div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-crust-800 dark:text-crumb-100">
-                {starter.averagePeakTime ?? '--'}
+                {starter.averagePeakTime != null ? `${starter.averagePeakTime}h` : '--'}
               </div>
               <div className="text-xs text-crust-500 dark:text-crumb-500">
-                Avg Peak (hrs)
+                {t('starterDetail.avgPeak')}
               </div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-crust-800 dark:text-crumb-100">
-                {feedings.length}
+              <div className={`text-2xl font-bold ${getHealthColor(starter.feedingStats?.activityScore)}`}>
+                {starter.feedingStats?.activityScore ?? '--'}
               </div>
               <div className="text-xs text-crust-500 dark:text-crumb-500">
-                Total Feedings
+                {t('starterDetail.activity')}
               </div>
             </div>
+          </div>
+
+          {/* Feeding cadence caption */}
+          <div className="mt-2 text-center text-xs text-crust-500 dark:text-crumb-500">
+            {feedings.length === 1
+              ? t('starterDetail.feedingCountOne', { count: feedings.length })
+              : t('starterDetail.feedingCountOther', { count: feedings.length })}
+            {starter.feedingStats?.medianIntervalDays != null && (
+              <>
+                {' · '}
+                {t('starterDetail.medianInterval', {
+                  days: starter.feedingStats.medianIntervalDays,
+                })}
+              </>
+            )}
+            {starter.feedingStats != null &&
+              starter.feedingStats.peakSampleCount === 0 &&
+              feedings.length > 0 && (
+                <>
+                  {' · '}
+                  {t('starterDetail.markPeakHint')}
+                </>
+              )}
           </div>
 
           {/* Quick Actions */}
@@ -317,7 +464,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
               onClick={() => openModal('feed-starter', { starterId: starter.uuid })}
             >
               <Droplets className="w-4 h-4" />
-              Feed Now
+              {t('starterDetail.feedNow')}
             </Button>
             <Button
               variant="ghost"
@@ -326,11 +473,182 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
               onClick={() => setShowPhotoSheet(true)}
             >
               <Sparkles className="w-4 h-4" />
-              {isAnalyzing ? 'Analyzing…' : 'Analyze'}
+              {isAnalyzing ? t('starterDetail.analyzing') : t('starterDetail.analyze')}
             </Button>
+          </div>
+          {/* Mark peak — captures time-to-peak for the latest feeding */}
+          {feedings.some((f) => !f.peakTime) && (
+            <Button
+              variant="ghost"
+              fullWidth
+              onClick={handleMarkPeak}
+              className="mt-2"
+            >
+              <TrendingUp className="w-4 h-4" />
+              {t('starterDetail.markPeakNow')}
+            </Button>
+          )}
+          {/* Plan a feed — recommend when/what ratio to feed for a target peak */}
+          <Button
+            variant="ghost"
+            fullWidth
+            onClick={() => setShowPlanFeed(true)}
+            className="mt-2"
+          >
+            <Calendar className="w-4 h-4" />
+            {t('starterDetail.planAFeed')}
+          </Button>
+        </Card>
+      </motion.div>
+
+      {/* Storage Location */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.12 }}
+        className="mb-6"
+      >
+        <Card padding="md">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="font-medium text-crust-800 dark:text-crumb-100">{t('starterDetail.storage')}</p>
+              <p className="text-xs text-crust-500 dark:text-crumb-500 mt-0.5">
+                {getStorageLocationMeta(starter.storageLocation).description}
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => handleChangeLocation('room')}
+              aria-pressed={getStorageLocation(starter.storageLocation) === 'room'}
+              className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl border text-sm font-medium transition-colors ${
+                getStorageLocation(starter.storageLocation) === 'room'
+                  ? 'bg-honey-50 dark:bg-honey-900/20 border-honey-400 dark:border-honey-600 text-honey-700 dark:text-honey-400'
+                  : 'bg-surface1 dark:bg-surfaceDark1 border-crumb-300/50 dark:border-crust-600/50 text-crust-700 dark:text-crumb-200 active:bg-crumb-100 dark:active:bg-surfaceDark2'
+              }`}
+            >
+              <Home className="w-4 h-4" />
+              {t('starterDetail.room')}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleChangeLocation('fridge')}
+              aria-pressed={getStorageLocation(starter.storageLocation) === 'fridge'}
+              className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl border text-sm font-medium transition-colors ${
+                getStorageLocation(starter.storageLocation) === 'fridge'
+                  ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-400 dark:border-blue-600 text-blue-700 dark:text-blue-300'
+                  : 'bg-surface1 dark:bg-surfaceDark1 border-crumb-300/50 dark:border-crust-600/50 text-crust-700 dark:text-crumb-200 active:bg-crumb-100 dark:active:bg-surfaceDark2'
+              }`}
+            >
+              <Snowflake className="w-4 h-4" />
+              {t('starterDetail.fridge')}
+            </button>
           </div>
         </Card>
       </motion.div>
+
+      {/* Discard tracker */}
+      {(starter.discardGrams ?? 0) > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.13 }}
+          className="mb-6"
+        >
+          <Card
+            padding="md"
+            className={
+              (starter.discardGrams ?? 0) >= 100
+                ? 'bg-honey-50 dark:bg-honey-950/20 border-honey-200 dark:border-honey-800'
+                : ''
+            }
+          >
+            <div className="flex items-center gap-3">
+              <Recycle className="w-5 h-5 text-honey-600 dark:text-honey-400 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="font-medium text-crust-800 dark:text-crumb-100">
+                  {t('starterDetail.discardSavedUp', { grams: starter.discardGrams ?? 0 })}
+                </p>
+                <p className="text-xs text-crust-500 dark:text-crumb-500 mt-0.5">
+                  {(starter.discardGrams ?? 0) >= 100
+                    ? t('starterDetail.discardEnough')
+                    : t('starterDetail.discardAccumulating')}
+                </p>
+              </div>
+            </div>
+            {(starter.discardGrams ?? 0) >= 100 && (
+              <div className="flex gap-2 mt-3">
+                <Button
+                  fullWidth
+                  size="sm"
+                  onClick={() => openBookAtCategory('discard')}
+                >
+                  <Recycle className="w-4 h-4" />
+                  {t('starterDetail.discardRecipes')}
+                </Button>
+                <Button variant="ghost" size="sm" fullWidth onClick={handleUsedDiscard}>
+                  {t('starterDetail.usedIt')}
+                </Button>
+              </div>
+            )}
+            {(starter.discardGrams ?? 0) < 100 && (
+              <button
+                onClick={handleUsedDiscard}
+                className="text-xs text-crust-500 dark:text-crumb-500 mt-2 underline"
+              >
+                {t('starterDetail.markUsed')}
+              </button>
+            )}
+          </Card>
+        </motion.div>
+      )}
+
+      {/* Peak-time history (shown once there are enough recorded peaks) */}
+      {peakHistory.length >= 3 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.13 }}
+          className="mb-6"
+        >
+          <Card padding="md">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-honey-500" />
+                <p className="font-medium text-crust-800 dark:text-crumb-100">
+                  {t('starterDetail.timeToPeak')}
+                </p>
+              </div>
+              <p className="text-xs text-crust-500 dark:text-crumb-500">
+                {t('starterDetail.lastNPeaks', { count: peakHistory.length })}
+              </p>
+            </div>
+            <div className="h-24">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={peakHistory} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+                  <YAxis hide domain={['dataMin - 1', 'dataMax + 1']} />
+                  <Tooltip
+                    formatter={(v) => [`${v}h`, t('starterDetail.peakTooltip')]}
+                    labelFormatter={() => ''}
+                    contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="hours"
+                    stroke="#d97706"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: '#d97706' }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="text-xs text-center text-crust-500 dark:text-crumb-500 mt-1">
+              {t('starterDetail.normalizedCaption', { temp: settings.defaultAmbientTemp })}
+            </p>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Birthday */}
       <motion.div
@@ -342,21 +660,24 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
         <Card padding="md" className="flex items-center gap-3">
           <Calendar className="w-5 h-5 text-honey-500" />
           <div>
-            <p className="text-sm text-crust-600 dark:text-crumb-400">Birthday</p>
+            <p className="text-sm text-crust-600 dark:text-crumb-400">{t('starterDetail.birthday')}</p>
             <p className="font-medium text-crust-800 dark:text-crumb-100">
               {format(new Date(starter.createdDate), 'MMMM d, yyyy')}
             </p>
           </div>
           <div className="ml-auto text-right">
             <p className="text-sm text-crust-500 dark:text-crumb-500">
-              {formatDistanceToNow(new Date(starter.createdDate))} old
+              {t('starterDetail.ageOld', {
+                age: formatDistanceToNow(new Date(starter.createdDate)),
+              })}
             </p>
           </div>
         </Card>
       </motion.div>
 
-      {/* AI Analysis */}
-      {starter.lastAnalysis && (
+      {/* AI Analysis — only while it still reflects the current state (hidden
+          once the starter is fed after the analysis was taken). */}
+      {starter.lastAnalysis && analysisIsCurrent && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -367,7 +688,9 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium text-crust-600 dark:text-crumb-400 flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-honey-500" />
-                {starter.lastAnalysis.source === 'claude' ? 'Claude Analysis' : 'Quick Estimate'}
+                {starter.lastAnalysis.source === 'claude'
+                  ? t('starterDetail.claudeAnalysis')
+                  : t('starterDetail.quickEstimate')}
               </h3>
               {starter.lastAnalysis.stage && starter.lastAnalysis.stageLabel ? (
                 <Badge variant={stageBadgeVariant(starter.lastAnalysis.stage)}>
@@ -377,10 +700,10 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
               ) : starter.lastAnalysis.readyToBake ? (
                 <Badge variant="success">
                   <CheckCircle2 className="w-3 h-3" />
-                  Ready to bake
+                  {t('starterDetail.readyToBake')}
                 </Badge>
               ) : (
-                <Badge variant="warning">Not ready yet</Badge>
+                <Badge variant="warning">{t('starterDetail.notReadyYet')}</Badge>
               )}
             </div>
 
@@ -418,13 +741,17 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
 
             <p className="text-xs text-crust-500 dark:text-crumb-500 mt-3">
               {starter.lastAnalysis.source === 'on-device'
-                ? 'On-device estimate'
-                : `${starter.lastAnalysis.confidence} confidence`}{' '}
-              · analyzed {formatDistanceToNow(new Date(starter.lastAnalysis.timestamp))} ago
+                ? t('starterDetail.onDeviceEstimate')
+                : t('starterDetail.confidenceLabel', {
+                    confidence: starter.lastAnalysis.confidence,
+                  })}{' '}
+              {t('starterDetail.analyzedAgo', {
+                ago: formatDistanceToNow(new Date(starter.lastAnalysis.timestamp)),
+              })}
             </p>
             {starter.lastAnalysis.source === 'on-device' && !hasClaudeKey && (
               <p className="text-xs text-crust-400 dark:text-crumb-600 mt-1">
-                Add a Claude API key in Settings for richer, photo-based advice.
+                {t('starterDetail.addKeyForRicherAdvice')}
               </p>
             )}
           </Card>
@@ -441,7 +768,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
         >
           <Card padding="md">
             <h3 className="text-sm font-medium text-crust-600 dark:text-crumb-400 mb-2">
-              Notes
+              {t('starterDetail.notes')}
             </h3>
             <p className="text-crust-800 dark:text-crumb-100">{starter.notes}</p>
           </Card>
@@ -456,7 +783,7 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
       >
         <h2 className="text-lg font-display font-semibold text-crust-800 dark:text-crumb-100 mb-4 flex items-center gap-2">
           <TrendingUp className="w-5 h-5 text-honey-500" />
-          Feeding History
+          {t('starterDetail.feedingHistory')}
         </h2>
 
         {feedings.length > 0 ? (
@@ -475,8 +802,11 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
                         {feeding.ratio}
                       </p>
                       <p className="text-sm text-crust-500 dark:text-crumb-500 mt-0.5">
-                        {feeding.starterWeight}g starter + {feeding.flourWeight}g flour +{' '}
-                        {feeding.waterWeight}g water
+                        {t('starterDetail.feedingComposition', {
+                          starter: feeding.starterWeight,
+                          flour: feeding.flourWeight,
+                          water: feeding.waterWeight,
+                        })}
                       </p>
                       {feeding.notes && (
                         <p className="text-sm text-crust-600 dark:text-crumb-400 mt-1 italic">
@@ -493,13 +823,13 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
                       </p>
                       {feeding.peakTime && (
                         <p className="text-xs text-honey-600 dark:text-honey-400 mt-1">
-                          Peaked:{' '}
-                          {Math.round(
-                            (new Date(feeding.peakTime).getTime() -
-                              new Date(feeding.timestamp).getTime()) /
-                              (1000 * 60 * 60)
-                          )}
-                          h
+                          {t('starterDetail.peakedHours', {
+                            hours: Math.round(
+                              (new Date(feeding.peakTime).getTime() -
+                                new Date(feeding.timestamp).getTime()) /
+                                (1000 * 60 * 60)
+                            ),
+                          })}
                         </p>
                       )}
                     </div>
@@ -510,21 +840,21 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
 
             {feedings.length > 10 && (
               <p className="text-center text-sm text-crust-500 dark:text-crumb-500 pt-2">
-                And {feedings.length - 10} more feedings...
+                {t('starterDetail.moreFeedings', { count: feedings.length - 10 })}
               </p>
             )}
           </div>
         ) : (
           <Card padding="lg" className="text-center">
             <p className="text-crust-600 dark:text-crumb-400">
-              No feedings recorded yet
+              {t('starterDetail.noFeedingsYet')}
             </p>
             <Button
               size="sm"
               className="mt-3"
               onClick={() => openModal('feed-starter', { starterId: starter.uuid })}
             >
-              Log First Feeding
+              {t('starterDetail.logFirstFeeding')}
             </Button>
           </Card>
         )}
@@ -535,9 +865,9 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
         isOpen={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
         onConfirm={handleDelete}
-        title={`Delete ${starter.name}?`}
-        message="This will permanently delete this starter and all its feeding history. This action cannot be undone."
-        confirmText="Delete"
+        title={t('starterDetail.deleteConfirmTitle', { name: starter.name })}
+        message={t('starterDetail.deleteConfirmMessage')}
+        confirmText={t('common.delete')}
         variant="danger"
       />
 
@@ -546,27 +876,31 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
         starter={starter}
-        onSave={(updatedStarter) => setStarter(updatedStarter)}
+      />
+
+      <PlanFeedModal
+        isOpen={showPlanFeed}
+        onClose={() => setShowPlanFeed(false)}
+        starter={starter}
       />
 
       {/* Help: how starter analysis works */}
       <BottomSheet
         isOpen={showHelp}
         onClose={() => setShowHelp(false)}
-        title="Analyzing your starter"
+        title={t('starterDetail.help.title')}
       >
         <div className="space-y-5">
           <p className="text-sm text-crust-600 dark:text-crumb-400">
-            Take a photo of your starter and get a read on how active and ready
-            it looks. Here's how it works:
+            {t('starterDetail.help.intro')}
           </p>
 
           {/* Steps */}
           <ol className="space-y-3">
             {[
-              { n: 1, t: 'Tap "Analyze"', d: 'On this starter\'s page, tap the Analyze button.' },
-              { n: 2, t: 'Add a photo', d: 'Take a photo or pick one from your gallery — a clear, well-lit shot of the surface works best.' },
-              { n: 3, t: 'Get your results', d: 'You\'ll see scores plus a few observations and suggestions, saved to this starter.' },
+              { n: 1, t: t('starterDetail.help.step1Title'), d: t('starterDetail.help.step1Body') },
+              { n: 2, t: t('starterDetail.help.step2Title'), d: t('starterDetail.help.step2Body') },
+              { n: 3, t: t('starterDetail.help.step3Title'), d: t('starterDetail.help.step3Body') },
             ].map((s) => (
               <li key={s.n} className="flex gap-3">
                 <span className="flex-shrink-0 w-6 h-6 rounded-full bg-honey-100 dark:bg-honey-900/30 text-honey-700 dark:text-honey-400 text-xs font-semibold flex items-center justify-center">
@@ -586,13 +920,12 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
               <div className="flex items-center gap-2 mb-1">
                 <Cpu className="w-4 h-4 text-honey-500" />
                 <p className="font-medium text-crust-800 dark:text-crumb-100">
-                  Quick estimate <span className="text-success-600 dark:text-success-400">· free</span>
+                  {t('starterDetail.help.quickEstimateTitle')}{' '}
+                  <span className="text-success-600 dark:text-success-400">{t('starterDetail.help.freeTag')}</span>
                 </p>
               </div>
               <p className="text-sm text-crust-600 dark:text-crumb-400">
-                Runs entirely on your device — no account, no internet needed. It looks at
-                bubble activity and surface texture to estimate how active your starter is.
-                It's a rough guide, not a verdict.
+                {t('starterDetail.help.quickEstimateBody')}
               </p>
             </div>
 
@@ -600,17 +933,17 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
               <div className="flex items-center gap-2 mb-1">
                 <Sparkles className="w-4 h-4 text-honey-500" />
                 <p className="font-medium text-crust-800 dark:text-crumb-100">
-                  Deep analysis (Claude) <span className="text-crust-500 dark:text-crumb-500">· needs a key</span>
+                  {t('starterDetail.help.deepAnalysisTitle')}{' '}
+                  <span className="text-crust-500 dark:text-crumb-500">{t('starterDetail.help.needsKeyTag')}</span>
                 </p>
               </div>
               <p className="text-sm text-crust-600 dark:text-crumb-400">
-                Sends the photo to Claude for richer, more detailed advice. Add an Anthropic
-                API key in Settings to unlock it — it costs a fraction of a cent per analysis.
+                {t('starterDetail.help.deepAnalysisBody')}
               </p>
               {!hasClaudeKey && (
                 <p className="mt-2 text-sm text-crust-500 dark:text-crumb-500 flex items-center gap-1.5">
                   <KeyRound className="w-3.5 h-3.5" />
-                  Settings → AI Features → add your API key
+                  {t('starterDetail.help.settingsPath')}
                 </p>
               )}
             </div>
@@ -621,36 +954,33 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
             <div className="flex items-center gap-2 mb-1.5">
               <FlaskConical className="w-4 h-4 text-honey-600 dark:text-honey-400" />
               <p className="font-medium text-crust-800 dark:text-crumb-100">
-                What's a float test?
+                {t('starterDetail.help.floatTestTitle')}
               </p>
             </div>
             <p className="text-sm text-crust-600 dark:text-crumb-400">
-              A quick way to check if your starter is ready: drop a small spoonful into a glass
-              of room-temperature water.
+              {t('starterDetail.help.floatTestIntro')}
             </p>
             <ul className="mt-2 space-y-1 text-sm">
               <li className="flex gap-2 text-crust-700 dark:text-crumb-300">
                 <span className="text-success-600 dark:text-success-400">●</span>
-                <span><strong>Floats</strong> — it's full of gas and active. Good to bake.</span>
+                <span><strong>{t('starterDetail.help.floatsWord')}</strong> — {t('starterDetail.help.floatsBody')}</span>
               </li>
               <li className="flex gap-2 text-crust-700 dark:text-crumb-300">
                 <span className="text-warning-600 dark:text-warning-400">●</span>
-                <span><strong>Sinks</strong> — not enough rise yet. Give it more time, or feed it and wait.</span>
+                <span><strong>{t('starterDetail.help.sinksWord')}</strong> — {t('starterDetail.help.sinksBody')}</span>
               </li>
             </ul>
             <p className="mt-2 text-xs text-crust-500 dark:text-crumb-500">
-              It's a handy guide, not foolproof — stiff or very wet starters can fool it, and
-              stirring the sample first lets the gas escape.
+              {t('starterDetail.help.floatTestCaveat')}
             </p>
           </div>
 
           <p className="text-xs text-crust-500 dark:text-crumb-500">
-            Tip: a photo taken a few hours after feeding (when it's rising) gives the most
-            useful read.
+            {t('starterDetail.help.tip')}
           </p>
 
           <Button fullWidth onClick={() => setShowHelp(false)}>
-            Got it
+            {t('starterDetail.help.gotIt')}
           </Button>
         </div>
       </BottomSheet>
@@ -659,27 +989,27 @@ export function StarterDetailPage({ starterId }: StarterDetailPageProps) {
       <ActionSheet
         isOpen={showPhotoSheet}
         onClose={() => setShowPhotoSheet(false)}
-        title="Analyze starter health"
+        title={t('starterDetail.analyzeSheetTitle')}
         actions={[
           {
-            label: 'Quick estimate · Take Photo',
+            label: t('starterDetail.actionQuickTakePhoto'),
             icon: <Camera className="w-5 h-5" />,
             onClick: () => handleAnalyze('camera', 'local'),
           },
           {
-            label: 'Quick estimate · From Gallery',
+            label: t('starterDetail.actionQuickFromGallery'),
             icon: <ImageIcon className="w-5 h-5" />,
             onClick: () => handleAnalyze('gallery', 'local'),
           },
           ...(hasClaudeKey
             ? [
                 {
-                  label: 'Deep analysis (Claude) · Take Photo',
+                  label: t('starterDetail.actionDeepTakePhoto'),
                   icon: <Sparkles className="w-5 h-5" />,
                   onClick: () => handleAnalyze('camera', 'claude'),
                 },
                 {
-                  label: 'Deep analysis (Claude) · From Gallery',
+                  label: t('starterDetail.actionDeepFromGallery'),
                   icon: <Sparkles className="w-5 h-5" />,
                   onClick: () => handleAnalyze('gallery', 'claude'),
                 },

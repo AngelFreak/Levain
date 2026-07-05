@@ -2,6 +2,14 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 import type { ScheduleStep, TimelineStep, ScheduledNotification, Starter } from '../types';
 import { checkPermissions, requestNotificationPermission } from './permissions';
+import { getFeedingReminderHours, getStorageLocation } from './storage';
+import {
+  PERSISTENT_BAKE_NOTIFICATION_ID,
+  FEEDING_REMINDER_MIN,
+  FEEDING_REMINDER_MAX,
+  getFeedingReminderId,
+  getPlannedFeedId,
+} from './notificationIds';
 
 // Initialize notification channels for Android
 let channelsInitialized = false;
@@ -43,12 +51,9 @@ async function ensureNotificationChannels(): Promise<void> {
   }
 }
 
-// Notification ID ranges to avoid collisions
-// 1-99: Persistent/ongoing notifications
-// 100-999: Feeding reminders
-// 1000+: Bake timeline notifications
-const PERSISTENT_BAKE_NOTIFICATION_ID = 1;
-const FEEDING_REMINDER_ID_BASE = 100;
+// Notification IDs are owned by src/lib/notificationIds.ts, which partitions the
+// integer space and allocates from persisted counters so IDs never collide.
+// (Legacy code used a uuid-hash into 100-999 and Date.now() bases — both unsafe.)
 
 type NotificationCategory = 'bake_step' | 'feeding_reminder' | 'persistent_bake';
 
@@ -139,6 +144,12 @@ export function convertToTimelineSteps(scheduleSteps: ScheduleStep[]): TimelineS
     duration: step.duration,
     status: 'pending' as const,
     photoPrompt: step.photoPrompt,
+    tips: step.tips,
+    // Carry i18n metadata so persisted timelines stay localizable at display time.
+    nameKey: step.nameKey,
+    descKey: step.descKey,
+    tipsKey: step.tipsKey,
+    i18nParams: step.i18nParams,
   }));
 }
 
@@ -242,18 +253,27 @@ export async function scheduleTimelineNotifications(
 }
 
 /**
- * Schedule a feeding reminder for a starter
- * @param starter The starter that was just fed
- * @param feedingTime When the feeding occurred
- * @param reminderHours Hours after feeding to send reminder
+ * Schedule a feeding reminder for a starter.
+ *
+ * The interval is chosen from the starter's storage location: a room-temp
+ * starter uses `roomReminderHours` (the user's configured interval), while a
+ * starter in the fridge uses the fixed weekly cadence. This keeps the cadence
+ * correct no matter which screen triggers the (re)schedule.
+ *
+ * @param starter The starter that was just fed (or whose location changed)
+ * @param feedingTime When the last feeding occurred (reminder is relative to this)
+ * @param roomReminderHours Room-temp interval in hours (from user settings)
  */
 export async function scheduleFeedingReminder(
   starter: Starter,
   feedingTime: Date,
-  reminderHours: number
+  roomReminderHours: number
 ): Promise<{ success: boolean; permissionDenied: boolean; scheduledTime?: Date }> {
+  // Resolve the effective interval from the starter's location.
+  const effectiveHours = getFeedingReminderHours(starter.storageLocation, roomReminderHours);
+
   // Calculate reminder time
-  const reminderTime = new Date(feedingTime.getTime() + reminderHours * 60 * 60 * 1000);
+  const reminderTime = new Date(feedingTime.getTime() + effectiveHours * 60 * 60 * 1000);
 
   // Don't schedule if time is in the past
   if (reminderTime.getTime() <= Date.now()) {
@@ -270,26 +290,54 @@ export async function scheduleFeedingReminder(
     }
   }
 
-  // Generate a consistent notification ID for this starter
-  // Using a hash of the starter UUID to get a number between 100-999
-  const starterId = starter.uuid;
-  const hash = starterId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  const notificationId = FEEDING_REMINDER_ID_BASE + (hash % 900);
+  // Stable, collision-free per-starter ID (persisted, not hashed).
+  const notificationId = await getFeedingReminderId(starter.uuid);
 
   // Cancel any existing reminder for this starter first
   await cancelFeedingReminder(starter);
+
+  // Tailor the copy to where the starter is kept.
+  const elapsed =
+    getStorageLocation(starter.storageLocation) === 'fridge'
+      ? `${Math.round(effectiveHours / 24)} days`
+      : `${effectiveHours} hours`;
 
   // Schedule the notification with feeding_reminder category
   await scheduleNotification(
     notificationId,
     `🥣 Time to feed ${starter.name}!`,
-    `It's been ${reminderHours} hours since the last feeding. Your starter is ready for its next meal.`,
+    `It's been ${elapsed} since the last feeding. Your starter is ready for its next meal.`,
     reminderTime,
     'feeding_reminder'
   );
 
   console.log(`Scheduled feeding reminder for ${starter.name} at ${reminderTime.toLocaleString()}`);
   return { success: true, permissionDenied: false, scheduledTime: reminderTime };
+}
+
+/**
+ * Re-evaluate a starter's feeding reminder after something other than a feeding
+ * changed — typically a move between room and fridge. Reschedules relative to the
+ * starter's last feeding using the location-appropriate interval. If the starter
+ * was never fed, or reminders are off, any existing reminder is simply cancelled.
+ *
+ * @param starter The starter whose location/state changed
+ * @param remindersEnabled Whether feeding reminders are enabled in settings
+ * @param roomReminderHours Room-temp interval in hours (from user settings)
+ */
+export async function rescheduleFeedingReminder(
+  starter: Starter,
+  remindersEnabled: boolean,
+  roomReminderHours: number
+): Promise<{ success: boolean; permissionDenied: boolean; scheduledTime?: Date }> {
+  // Without reminders enabled or a feeding to anchor to, there's nothing to
+  // schedule — clear any stale reminder so the cadence doesn't go stale.
+  if (!remindersEnabled || !starter.lastFed) {
+    await cancelFeedingReminder(starter);
+    return { success: false, permissionDenied: false };
+  }
+
+  return scheduleFeedingReminder(starter, new Date(starter.lastFed), roomReminderHours);
 }
 
 /**
@@ -301,9 +349,8 @@ export async function cancelFeedingReminder(starter: Starter): Promise<void> {
     return;
   }
 
-  // Calculate the same notification ID
-  const hash = starter.uuid.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  const notificationId = FEEDING_REMINDER_ID_BASE + (hash % 900);
+  // Same stable per-starter ID used when scheduling.
+  const notificationId = await getFeedingReminderId(starter.uuid);
 
   try {
     await LocalNotifications.cancel({
@@ -313,6 +360,59 @@ export async function cancelFeedingReminder(starter: Starter): Promise<void> {
   } catch (error) {
     console.error('Failed to cancel feeding reminder:', error);
   }
+}
+
+/**
+ * Schedule a one-off "feed now to peak by your target" reminder for a planned
+ * feed (Stage 8). Distinct from the recurring feeding reminder. Replaces any
+ * prior planned-feed reminder for this starter. No-ops (cancels) if the feed
+ * time is in the past.
+ *
+ * @param starter The starter being planned.
+ * @param feedAt  When to feed.
+ * @param ratio   Recommended ratio, included in the body.
+ * @param targetPeak When it should peak (for the body copy).
+ */
+export async function schedulePlannedFeedReminder(
+  starter: Starter,
+  feedAt: Date,
+  ratio: string,
+  targetPeak: Date
+): Promise<{ success: boolean; permissionDenied: boolean }> {
+  const id = await getPlannedFeedId(starter.uuid);
+
+  // Always clear a previous planned-feed reminder first.
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await LocalNotifications.cancel({ notifications: [{ id }] });
+    } catch {
+      // ignore — nothing scheduled
+    }
+  }
+
+  if (feedAt.getTime() <= Date.now()) {
+    return { success: false, permissionDenied: false };
+  }
+
+  const permissions = await checkPermissions();
+  if (!permissions.notifications) {
+    const granted = await requestNotificationPermission();
+    if (!granted) return { success: false, permissionDenied: true };
+  }
+
+  const peakLabel = targetPeak.toLocaleString(undefined, {
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  await scheduleNotification(
+    id,
+    `🥣 Feed ${starter.name} now (${ratio})`,
+    `Feed at ${ratio} so it peaks around ${peakLabel}.`,
+    feedAt,
+    'feeding_reminder'
+  );
+  return { success: true, permissionDenied: false };
 }
 
 /**
@@ -328,7 +428,7 @@ export async function getPendingFeedingReminders(): Promise<
   try {
     const pending = await LocalNotifications.getPending();
     return pending.notifications
-      .filter((n) => n.id >= FEEDING_REMINDER_ID_BASE && n.id < 1000)
+      .filter((n) => n.id >= FEEDING_REMINDER_MIN && n.id <= FEEDING_REMINDER_MAX)
       .map((n) => ({
         id: n.id,
         title: n.title || '',
@@ -341,14 +441,23 @@ export async function getPendingFeedingReminders(): Promise<
 }
 
 /**
- * Show a persistent notification for an active bake
- * This notification stays visible until the bake is complete or abandoned
+ * Show the persistent (ongoing) notification for active bakes. Stays visible
+ * until the last bake completes or is abandoned. There is a single persistent
+ * slot, so when more than one bake is active `activeCount` makes the body
+ * summarize them ("2 bakes in progress") while the title shows one bake's name.
+ *
+ * @param bakeName Name of the bake to feature in the title.
+ * @param activeCount Number of bakes currently active (defaults to 1).
  */
 export async function showPersistentBakeNotification(
-  bakeName: string
+  bakeName: string,
+  activeCount = 1
 ): Promise<void> {
+  const body =
+    activeCount > 1 ? `${activeCount} bakes in progress` : 'Bake in progress';
+
   if (!Capacitor.isNativePlatform()) {
-    console.log('Would show persistent notification:', bakeName);
+    console.log('Would show persistent notification:', bakeName, '—', body);
     return;
   }
 
@@ -372,8 +481,8 @@ export async function showPersistentBakeNotification(
       notifications: [
         {
           id: PERSISTENT_BAKE_NOTIFICATION_ID,
-          title: `🍞 ${bakeName}`,
-          body: 'Bake in progress',
+          title: activeCount > 1 ? `🍞 ${bakeName} +${activeCount - 1} more` : `🍞 ${bakeName}`,
+          body,
           ongoing: true, // Makes it persistent (can't be swiped away)
           autoCancel: false, // Don't auto-dismiss when tapped
           channelId: 'levain_persistent', // Silent channel - no vibration
@@ -386,7 +495,7 @@ export async function showPersistentBakeNotification(
         },
       ],
     });
-    console.log('Showing persistent bake notification:', bakeName);
+    console.log('Showing persistent bake notification:', bakeName, '—', body);
   } catch (error) {
     console.error('Failed to show persistent notification:', error);
   }
@@ -440,6 +549,42 @@ export async function getPendingNotifications(): Promise<Array<{ id: number; tit
   } catch (error) {
     console.error('Failed to get pending notifications:', error);
     return [];
+  }
+}
+
+/**
+ * One-time migration to the partitioned notification-ID scheme.
+ *
+ * Notifications scheduled under the old scheme (uuid-hash feeding IDs,
+ * Date.now() timeline bases) can't be cancelled by the new IDs, so we cancel
+ * ALL pending notifications once and let the caller rebuild the durable ones
+ * (feeding reminders) from app data. In-flight bake step notifications are not
+ * reconstructed — an acceptable one-time loss; the persistent bake notification
+ * is re-shown by ActiveBakePage on next view.
+ *
+ * @returns true if the migration ran this call (caller should rebuild reminders).
+ */
+export async function migrateNotificationScheme(): Promise<boolean> {
+  if (!Capacitor.isNativePlatform()) return false;
+
+  const KEY = 'notif.idSchemeMigratedV2';
+  const { getSetting, setSetting } = await import('./db');
+  const alreadyMigrated = await getSetting<boolean>(KEY, false);
+  if (alreadyMigrated) return false;
+
+  try {
+    const pending = await LocalNotifications.getPending();
+    if (pending.notifications.length > 0) {
+      await LocalNotifications.cancel({
+        notifications: pending.notifications.map((n) => ({ id: n.id })),
+      });
+    }
+    await setSetting(KEY, true);
+    console.log('Migrated notification ID scheme (cancelled stale notifications)');
+    return true;
+  } catch (error) {
+    console.error('Notification ID migration failed:', error);
+    return false;
   }
 }
 
